@@ -1,4 +1,4 @@
-"""Page header with the aurora background effect."""
+"""Simple page header shared by all screens."""
 
 from html import escape
 

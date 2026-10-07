@@ -61,31 +61,57 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   image:
-    name: build, verify and scan the serving image
+    name: build, verify and scan the ${{ matrix.target }} image
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     needs: [quality, security]
+    strategy:
+      matrix:
+        include:
+          - target: api
+            dockerfile: docker/serve.Dockerfile
+            forbidden: "('torch','timm','torchvision','pandas','sklearn')"
+          - target: ui
+            dockerfile: docker/ui.Dockerfile
+            forbidden: "('torch','timm','torchvision','onnxruntime')"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build
-        run: docker build -f docker/serve.Dockerfile -t defect-detection-api:ci .
+        run: docker build -f ${{ matrix.dockerfile }} -t defect-detection-${{ matrix.target }}:ci .
+      - name: Validate Compose configuration
+        run: |
+          cp .env.example .env
+          MODEL_VERSION=ci DD_UI_API_KEY=ci-placeholder-key-not-a-credential docker compose config --quiet
       - name: Verify image properties
         run: |
           # No torch or training stack in the serving image.
-          docker run --rm --entrypoint python defect-detection-api:ci -c \
-            "import importlib.util as u, sys; bad=[m for m in ('torch','timm','torchvision','pandas','sklearn') if u.find_spec(m)]; print(bad); sys.exit(1 if bad else 0)"
+          docker run --rm --entrypoint python defect-detection-${{ matrix.target }}:ci -c \
+            "import importlib.util as u, sys; bad=[m for m in ${{ matrix.forbidden }} if u.find_spec(m)]; print(bad); sys.exit(1 if bad else 0)"
           # Runs as a non-root user.
-          test "$(docker run --rm --entrypoint id defect-detection-api:ci -u)" = "10001"
+          test "$(docker run --rm --entrypoint id defect-detection-${{ matrix.target }}:ci -u)" = "10001"
           # Under a read-only root FS nothing can be written (writing must FAIL for CI to pass).
-          if docker run --rm --read-only --entrypoint sh defect-detection-api:ci \
-               -c 'touch /app/src/tamper' 2>/dev/null; then
+          if docker run --rm --read-only --entrypoint sh defect-detection-${{ matrix.target }}:ci \
+               -c 'touch /app/tamper' 2>/dev/null; then
             echo "root filesystem is writable"; exit 1
           fi
-          docker image inspect defect-detection-api:ci --format 'image size: {{.Size}} bytes'
+          docker image inspect defect-detection-${{ matrix.target }}:ci --format 'image size: {{.Size}} bytes'
+      - name: UI startup smoke test (read-only filesystem)
+        if: matrix.target == 'ui'
+        run: |
+          docker run -d --name ui-smoke --read-only --tmpfs /tmp:size=64m --cap-drop ALL \
+            --security-opt no-new-privileges:true defect-detection-ui:ci
+          trap 'docker logs ui-smoke; docker rm -f ui-smoke' EXIT
+          for attempt in $(seq 1 30); do
+            if docker exec ui-smoke python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=2)"; then
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
       - name: Trivy (fail on fixable HIGH/CRITICAL)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: defect-detection-api:ci
+          image-ref: defect-detection-${{ matrix.target }}:ci
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"

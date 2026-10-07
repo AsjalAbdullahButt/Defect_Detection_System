@@ -1,11 +1,14 @@
-"""Metric tiles with a CSS-only number ticker (Inspira number-ticker + card-spotlight)."""
+"""Simple metric tiles with accessible, static values."""
 
 from html import escape
 
 
 def ticker(value: int, suffix: str = "") -> str:
-    """Integer that counts up from 0 in CSS; the exact value is also given as plain text."""
-    shown = f'<span class="dd-ticker" style="--dd-target:{int(value)}" aria-hidden="true"></span>'
+    """Static integer with a plain-text equivalent for screen readers."""
+    shown = (
+        f'<span class="dd-ticker" style="--dd-target:{int(value)}" '
+        f'aria-hidden="true">{int(value)}</span>'
+    )
     return f'{shown}{escape(suffix)}<span class="dd-sr">{int(value)}{escape(suffix)}</span>'
 
 

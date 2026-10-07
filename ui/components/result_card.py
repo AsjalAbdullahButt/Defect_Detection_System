@@ -1,4 +1,4 @@
-"""Verdict card with the border-beam effect, plus banners for review and errors."""
+"""Simple verdict card and accessible review and error banners."""
 
 from html import escape
 
@@ -7,7 +7,7 @@ from components.metric_tile import ticker
 
 
 def verdict_tone(predicted_class: str, needs_review: bool) -> str:
-    """Beam colour: amber for review, otherwise the class colour."""
+    """Status colour: amber for review, otherwise the class colour."""
     if needs_review:
         return "review"
     return predicted_class if predicted_class in ("normal", "defective") else "review"

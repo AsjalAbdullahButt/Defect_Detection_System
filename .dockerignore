@@ -10,3 +10,10 @@
 **/__pycache__
 **/*.pyc
 configs/*.env
+!ui/
+ui/assets/samples/
+**/.streamlit/secrets.toml
+**/.env
+**/.env.*
+**/__pycache__/
+**/*.pyc

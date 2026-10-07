@@ -39,7 +39,7 @@ def render(html: str) -> None:
 
 
 def inject_theme() -> None:
-    """Design tokens + theme CSS; switch tokens to light when the configured theme is light.
+    """Design tokens + theme CSS; switch tokens to light when the configured theme is dark.
 
     The theme comes from server config (``theme.base``, set in .streamlit/config.toml or
     STREAMLIT_THEME_BASE), not from ``st.context.theme``: the latter is unknown on a session's
@@ -47,8 +47,8 @@ def inject_theme() -> None:
     (the main menu is hidden), so config is the single source of truth.
     """
     render(f"<style>{_css()}</style>")
-    if st.get_option("theme.base") == "light":
-        render('<span class="dd-theme-light" hidden></span>')
+    if st.get_option("theme.base") == "dark":
+        render('<span class="dd-theme-dark" hidden></span>')
 
 
 @st.cache_data(ttl=60, show_spinner=False)

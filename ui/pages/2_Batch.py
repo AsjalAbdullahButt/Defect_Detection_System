@@ -7,19 +7,17 @@ import pandas as pd
 import streamlit as st
 from PIL import Image
 
-from components.badges import version_badge
+from components.empty_state import empty_state
 from components.hero import hero
 from components.metric_tile import metric_tile, ticker, tiles
 from components.result_card import error_banner
 from services.api_client import ApiError
-from services.session import IMAGE_TYPES, get_client, get_config, model_info, render
+from services.session import IMAGE_TYPES, get_client, get_config, render
 
-info = model_info()
 render(
     hero(
         "Batch inspection",
-        "Upload several images; they are sent to the API in batches and come back in order.",
-        version_badge(info.model_version) if info else "",
+        "Check several parts at once. Review the results together and download a CSV.",
     )
 )
 
@@ -36,12 +34,20 @@ def thumbnail(data: bytes) -> str:
     return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
 
 
+def clear_results() -> None:
+    """Forget the previous batch whenever the selected uploads change."""
+    st.session_state.pop("batch_rows", None)
+    st.session_state.pop("batch_errors", None)
+
+
 files = st.file_uploader(
     "Images (JPEG, PNG, BMP or WebP, up to 5 MB each)",
     type=IMAGE_TYPES,
     accept_multiple_files=True,
     key="batch_upload",
+    on_change=clear_results,
 )
+st.caption("Results keep the same order as your uploads. Images are not saved to disk by the UI.")
 if st.button("Run batch", type="primary", disabled=not files):
     chunk = get_config().batch_chunk
     rows: list[dict[str, object]] = []
@@ -90,6 +96,9 @@ if rows:
         width="stretch",
         column_config={
             "image": st.column_config.ImageColumn("Image", width="small"),
+            "file": "Image name",
+            "class": "Result",
+            "request_id": None,
             "p_defective": st.column_config.NumberColumn("P(defective)", format="%.4f"),
             "confidence": st.column_config.NumberColumn("Confidence", format="%.4f"),
             "needs_review": st.column_config.CheckboxColumn("Needs review"),
@@ -101,3 +110,5 @@ if rows:
         file_name="predictions.csv",
         mime="text/csv",
     )
+else:
+    render(empty_state("Ready for your batch", "Add two or more images, then select Run batch."))

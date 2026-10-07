@@ -3,6 +3,7 @@
 import streamlit as st
 
 from components.badges import version_badge
+from components.empty_state import empty_state
 from components.hero import hero
 from components.metric_tile import metric_tile, text_value, tiles
 from services.session import load_report, model_info, render, report_path
@@ -10,14 +11,14 @@ from services.session import load_report, model_info, render, report_path
 info = model_info()
 render(
     hero(
-        "Model",
-        "The deployed model, its operating point (chosen on validation) and its test results.",
+        "Model & results",
+        "See which model is connected and how it performed on held-out images.",
         version_badge(info.model_version) if info else "",
     )
 )
 
 if info is None:
-    st.warning("The API is not reachable, so the deployed model cannot be shown.")
+    st.info("Connect the API to see the active model and its settings.")
 else:
     low, high = info.review_band
     render(
@@ -32,7 +33,12 @@ else:
 
 metrics = load_report("metrics.json")
 if metrics is None:
-    st.info("No test report found (reports/metrics.json). Run the training pipeline first.")
+    render(
+        empty_state(
+            "No evaluation report yet",
+            "Results will appear after a model has been trained and evaluated.",
+        )
+    )
 else:
     titles = {"test": "Official test set", "external_test": "External test set (512 px capture)"}
     for split, result in metrics["results"].items():
@@ -64,5 +70,6 @@ else:
         for p in (report_path("figures/test_confusion.png"), report_path("figures/test_curves.png"))
         if p
     ]
-    for figure in figures:
-        st.image(str(figure), width="stretch")
+    with st.expander("Confusion matrices and performance curves"):
+        for figure in figures:
+            st.image(str(figure), width="stretch")

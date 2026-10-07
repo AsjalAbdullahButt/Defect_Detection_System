@@ -20,9 +20,9 @@ showSidebarNavigation = true
 magicEnabled = false              # explicit st.* calls only
 
 [theme]
-base = "dark"
-primaryColor = "#3B82F6"
-backgroundColor = "#0A0D14"
-secondaryBackgroundColor = "#111623"
-textColor = "#E6EAF2"
+base = "light"
+primaryColor = "#087F8C"
+backgroundColor = "#F6F8FA"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#182C36"
 font = "sans serif"

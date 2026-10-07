@@ -45,5 +45,30 @@ services:
       retries: 3
     networks: [internal]
 
+  ui:
+    build:
+      context: .
+      dockerfile: docker/ui.Dockerfile
+    image: defect-detection-ui:local
+    environment:
+      DD_UI_API_URL: http://api:8000
+      DD_UI_API_KEY: ${DD_UI_API_KEY:?set DD_UI_API_KEY to one of DD_API_KEYS in .env}
+    ports:
+      - "127.0.0.1:8501:8501"
+    depends_on:
+      api:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777,noexec,nosuid,nodev
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    user: "10001:10001"
+    pids_limit: 128
+    mem_limit: 1g
+    restart: unless-stopped
+    networks: [internal]
+
 networks:
   internal: {}

@@ -4,6 +4,8 @@ Start with the root `README.md` (what it is, quickstart, results). Depth lives h
 
 | Document | Read it for |
 | --- | --- |
+| [GALLERY.md](GALLERY.md) | UI screenshots, evaluation figures and architecture diagrams |
+| [UI guide](../ui/README.md) | Local and Docker UI setup, settings and optional reports |
 | [architecture.md](architecture.md) | Training pipeline and request-flow diagrams; layering rules and how they are enforced |
 | [dataset.md](dataset.md) | Data source and licence, the leakage found in the official split, how the split was cleaned, EDA findings |
 | [model.md](model.md) | Model and training choices, the training run, calibration, threshold and review band |

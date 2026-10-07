@@ -1,29 +1,19 @@
-/* Design tokens: the ONLY place colours, radii, spacing and fonts are defined.
-   Dark is the default; light values apply when the app renders .dd-theme-light
-   (injected by app.py when Streamlit's active theme is light). */
-
+/* Shared palette and spacing. System fonts; no external assets. */
 :root {
-  /* surfaces */
-  --dd-bg: #0A0D14;
-  --dd-surface: #111623;
-  --dd-elevated: #161C2C;
-  --dd-border: rgba(148, 163, 184, 0.14);
-  --dd-text: #E6EAF2;
-  --dd-muted: #8A94A8;
-
-  /* accent (Inspira aurora / border-beam palette) */
-  --dd-accent-1: #3B82F6;
-  --dd-accent-2: #8B5CF6;
-  --dd-accent: linear-gradient(90deg, var(--dd-accent-1), var(--dd-accent-2));
-
-  /* semantic: always paired with text + icon, never colour alone */
-  --dd-normal: #10B981;
-  --dd-defective: #F43F5E;
-  --dd-review: #F59E0B;
-  --dd-on-semantic: #0A0D14;
-
-  /* shape and rhythm */
-  --dd-radius-card: 14px;
+  --dd-bg: #F6F8FA;
+  --dd-surface: #FFFFFF;
+  --dd-elevated: #EEF3F5;
+  --dd-border: #DDE5E9;
+  --dd-text: #182C36;
+  --dd-muted: #526873;
+  --dd-accent-1: #087F8C;
+  --dd-accent-2: #087F8C;
+  --dd-accent: #087F8C;
+  --dd-normal: #16724B;
+  --dd-defective: #B33342;
+  --dd-review: #946000;
+  --dd-on-semantic: #FFFFFF;
+  --dd-radius-card: 12px;
   --dd-radius-pill: 999px;
   --dd-space-1: 4px;
   --dd-space-2: 8px;
@@ -31,25 +21,20 @@
   --dd-space-4: 16px;
   --dd-space-5: 24px;
   --dd-space-6: 32px;
-
-  /* type: bundled-free, system fallbacks only (no runtime font downloads) */
-  --dd-font-ui: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --dd-font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
-
-  --dd-focus: 0 0 0 3px rgba(59, 130, 246, 0.55);
-  --dd-max-width: 1100px;
+  --dd-font-ui: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --dd-font-mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  --dd-focus: 0 0 0 3px rgba(8, 127, 140, .3);
+  --dd-max-width: 1120px;
 }
-
-:root:has(.dd-theme-light) {
-  --dd-bg: #F7F8FB;
-  --dd-surface: #FFFFFF;
-  --dd-elevated: #F1F3F8;
-  --dd-border: rgba(15, 23, 42, 0.12);
-  --dd-text: #0F172A;
-  --dd-muted: #4B5563;
-  --dd-normal: #047857;
-  --dd-defective: #BE123C;
-  --dd-review: #B45309;
-  --dd-on-semantic: #FFFFFF;
-  --dd-focus: 0 0 0 3px rgba(37, 99, 235, 0.45);
+:root:has(.dd-theme-dark) {
+  --dd-bg: #142129;
+  --dd-surface: #1B2D37;
+  --dd-elevated: #243A46;
+  --dd-border: #38505D;
+  --dd-text: #EFF5F7;
+  --dd-muted: #AFBFC8;
+  --dd-accent-1: #37B7BE;
+  --dd-normal: #218459;
+  --dd-defective: #C34350;
+  --dd-review: #946000;
 }

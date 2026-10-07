@@ -13,12 +13,16 @@ from services.session import inject_theme
 ASSETS = Path(__file__).resolve().parent / "assets"
 
 st.set_page_config(
-    page_title="Defect Inspection",
+    page_title="Defect Detection",
     page_icon=str(ASSETS / "logo.svg"),
     layout="wide",
     initial_sidebar_state="auto",  # collapses on narrow screens so it never covers content
 )
 inject_theme()
+
+with st.sidebar:
+    st.markdown("### Defect Detection")
+    st.caption("A closer look at every part.")
 
 navigation = st.navigation(
     [
@@ -29,7 +33,7 @@ navigation = st.navigation(
             default=True,
         ),
         st.Page("pages/2_Batch.py", title="Batch", icon=":material/grid_view:"),
-        st.Page("pages/3_Model.py", title="Model", icon=":material/insights:"),
+        st.Page("pages/3_Model.py", title="Model & results", icon=":material/insights:"),
         st.Page("pages/4_Explain.py", title="Explain", icon=":material/visibility:"),
     ]
 )

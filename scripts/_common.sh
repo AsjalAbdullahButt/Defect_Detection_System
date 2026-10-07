@@ -19,7 +19,9 @@ require_venv() {
 # Load KEY=VALUE pairs from .env (if present) without overriding variables already set.
 load_dotenv() {
   [ -f .env ] || return 0
-  while IFS='=' read -r key value; do
+  while IFS='=' read -r key value || [ -n "$key" ]; do
+    key="${key%$'\r'}"
+    value="${value%$'\r'}"
     case "$key" in ''|\#*) continue ;; esac
     if [ -z "${!key:-}" ]; then export "$key=$value"; fi
   done < .env
