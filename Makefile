@@ -7,7 +7,7 @@ RUN := uv run
 DATA_DIR ?= data/raw
 
 .DEFAULT_GOAL := help
-.PHONY: help lock setup setup-serve lint format typecheck test inspect manifest split audit data eda train calibrate evaluate anomaly error-analysis export benchmark
+.PHONY: help lock setup setup-serve lint format typecheck test inspect manifest split audit data eda train calibrate evaluate anomaly error-analysis export benchmark serve
 
 help: ## List available targets
 	@uv run --no-project python -c "import re; [print(f'{m[0]:<14} {m[1]}') for m in re.findall(r'^([a-z-]+):.*?## (.*)$$', open('Makefile').read(), re.M)]"
@@ -79,3 +79,6 @@ export: ## Export runs/LATEST to models/<version>/ (ONNX + meta + SHA256SUMS), c
 
 benchmark: ## CPU latency/throughput PyTorch vs ONNX (fp32, int8) -> reports/benchmark.md
 	$(RUN) defect-detection benchmark
+
+serve: ## Run the API locally (set DD_MODEL_DIR; see configs/serve.env.example)
+	$(RUN) uvicorn --factory defect_detection.serving.main:create_app --host 127.0.0.1 --port 8000

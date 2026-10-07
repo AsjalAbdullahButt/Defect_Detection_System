@@ -123,14 +123,18 @@ class TrainedModel:
 
 
 def load_trained_model(run_dir: Path, device: torch.device) -> TrainedModel:
-    """Rebuild the network from ``best.pt``; architecture/preprocessing come from the checkpoint."""
+    """Rebuild the network from ``best.pt`` in EVAL mode (BatchNorm uses its running stats).
+
+    Architecture and preprocessing come from the checkpoint. Returning eval mode by default
+    matters: a train-mode forward on one image normalises with that image's own statistics.
+    """
     checkpoint = load_checkpoint(run_dir / CHECKPOINT_NAME)
     trained = checkpoint["config"]
     model_cfg = ModelConfig.model_validate({**trained["model"], "pretrained": False})
     pre = PreprocessConfig.model_validate(trained["preprocess"])
     model = create_model(model_cfg)
     model.load_state_dict(checkpoint["state_dict"])
-    model.to(device)
+    model.to(device).eval()
     spec = PreprocessSpec(pre.image_size, pre.mean, pre.std)
     return TrainedModel(model, spec, model_cfg.backbone, checkpoint)
 

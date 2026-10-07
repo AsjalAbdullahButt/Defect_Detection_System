@@ -1,5 +1,6 @@
 """Shared fixtures. All images are generated on the fly; no real data is committed."""
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -8,11 +9,14 @@ import matplotlib
 import pandas as pd
 import pytest
 import yaml
+from fastapi.testclient import TestClient
 
 from defect_detection.config import ProjectConfig
 from defect_detection.data.dedupe import Thumbnails, load_thumbnails
 from defect_detection.data.manifest import build_manifest
 from defect_detection.data.split import make_splits
+from defect_detection.serving.main import create_app
+from tests.fixtures.serving import ExportedModel, build_exported_model, make_settings
 from tests.fixtures.synthetic import build_planted_dataset, write_image
 
 matplotlib.use("Agg")  # headless plotting in tests
@@ -51,6 +55,7 @@ def make_config(root: Path, strategy: str = "auto", seed: int = 42) -> ProjectCo
     raw["model"].update(backbone="test_efficientnet", pretrained=False)
     raw["anomaly"].update(backbone="test_efficientnet", patches_per_image=8, coreset_size=50)
     raw["evaluation"]["bootstrap_resamples"] = 200
+    raw["export"]["models_dir"] = str(root / "models")  # absolute: never write into the repo
     raw["train"].update(
         output_dir=str(root / "runs"),
         device="cpu",
@@ -101,3 +106,17 @@ def official_run(tmp_path_factory: pytest.TempPathFactory) -> PipelineRun:
 def random_run(tmp_path_factory: pytest.TempPathFactory) -> PipelineRun:
     """Planted dataset without split folders (random strategy)."""
     return run_pipeline(tmp_path_factory.mktemp("random"), with_official_test=False)
+
+
+@pytest.fixture(scope="session")
+def exported_model(tmp_path_factory: pytest.TempPathFactory) -> ExportedModel:
+    """A real ONNX model (tiny network) exported by the production CLI pipeline."""
+    root = tmp_path_factory.mktemp("serving")
+    return build_exported_model(make_config(root), root)
+
+
+@pytest.fixture
+def client(exported_model: ExportedModel) -> Iterator[TestClient]:
+    """API client with the model loaded (lifespan entered)."""
+    with TestClient(create_app(make_settings(exported_model.model_dir))) as test_client:
+        yield test_client

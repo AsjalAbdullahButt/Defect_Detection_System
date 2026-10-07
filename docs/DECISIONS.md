@@ -273,3 +273,41 @@ Format: **Decision · Alternatives · Why · Trade-off**. One entry per non-triv
 - **Alternatives:** time only ONNX; ship INT8 if it is faster.
 - **Why:** same real val images, same thread count (4, the physical cores here) for PyTorch and ONNX Runtime, warm-up discarded, p50/p95/p99 over 100 calls, throughput from the median. INT8 is written next to the run, never into `models/`. Its effect on decisions at the operating threshold is measured on the full val split, because a faster model that flips a defect decision isn't an improvement.
 - **Trade-off:** dynamic quantisation mainly helps MatMul-heavy models. On a depthwise-conv CNN it may give little speed-up; the table reports whatever it measures.
+
+## V6 — Inference API
+
+### D-044 Layers: routes → PredictionService → Predictor protocol; app built by `create_app(settings)`
+
+- **Alternatives:** one module with global model state; loading the model at import time.
+- **Why:** routes only parse and shape HTTP. The service owns the business rules (temperature, threshold, review band, confidence). The engine is an ONNX Runtime adapter behind a one-method `Predictor` protocol, so it can be replaced (OpenVINO, a fake in tests) without touching the rules. Dependencies are injected with `Depends`. Nothing happens at import time: the lifespan verifies and loads the model once, so tests build isolated apps with different settings.
+- **Trade-off:** more files than a single `app.py`, but each one is short and testable on its own. `inference/gate.py` is an addition to §2.
+
+### D-045 Upload validation order, all in memory
+
+- **Alternatives:** trust `Content-Type`; rely on Pillow's global `MAX_IMAGE_PIXELS`; write uploads to a temp file.
+- **Why:** the size is capped while streaming (413). The format comes from magic bytes only (415), and Pillow may only open that format. The header pixel count is checked explicitly before decoding: relying on Pillow's process-wide global failed a test when the global wasn't set. Then `verify()`, re-open, reject multi-frame, check dimensions and aspect ratio, full decode. Uploads never touch disk and client filenames are never used or logged.
+- **Trade-off:** valid but unusual files (CMYK TIFF, GIF) are refused. That's acceptable for a fixed camera rig.
+
+### D-046 Bounded inference: fail fast with 503, time out with 504, release the slot only when work finishes
+
+- **Alternatives:** an unbounded queue (FastAPI's default thread pool); releasing the slot on timeout.
+- **Why:** queueing hides overload until latency explodes; rejecting immediately lets a load balancer or client retry elsewhere. A Python thread can't be killed, so a timed-out request keeps its slot until the work really ends, otherwise a stuck model would let the server take on more work than it has CPU for. Threads × concurrent inferences ≤ cores avoids oversubscription (documented in `serve.env.example`).
+- **Trade-off:** under a burst, some clients get 503 instead of waiting. That's the intended behaviour.
+
+### D-047 One error shape; nothing echoed or leaked
+
+- **Alternatives:** FastAPI's default error bodies (they echo the submitted input on 422).
+- **Why:** every error is `{error, detail, request_id}` with a fixed, human-written detail. A 422 lists only the field names, never the values. Unexpected exceptions become a generic 500 and the cause is logged server-side. A client-supplied `X-Request-ID` is kept only if it's ≤ 64 safe characters, so it can't inject fake log lines.
+- **Trade-off:** less detail for API consumers while debugging; the request id links them to the server logs.
+
+### D-048 Metrics on a separate internal port; bounded labels; JSON logs
+
+- **Alternatives:** `/metrics` on the public app; labels using raw URL paths.
+- **Why:** metrics reveal traffic and model behaviour, so they're served on their own port (default 127.0.0.1:9100) that the container doesn't publish (V8). Labels use route templates, class names and status codes only, so a client can't create unbounded time series. The `dd_defect_probability` histogram is a cheap drift signal. Logs are one JSON object per line with `request_id`, method, route, status and duration.
+- **Trade-off:** a second port to configure in Docker and Prometheus.
+
+### D-049 Batch is all-or-nothing; confidence is the probability of the predicted class
+
+- **Alternatives:** partial batch results with per-item errors; confidence = max(p, 1 − p).
+- **Why:** all-or-nothing keeps the contract simple and avoids silently half-processed batches. The error names the problem and the client fixes the file. Confidence follows the decision: with a threshold below 0.5, an image just above the threshold is "defective" with confidence < 0.5. That's honest, and those images are always inside the review band (`needs_review: true`).
+- **Trade-off:** one bad file costs the client a resubmission of the batch.
