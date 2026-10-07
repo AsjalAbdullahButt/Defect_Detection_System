@@ -1229,7 +1229,17 @@ numpy==2.5.3 \
     # via
     #   -c requirements/serve.txt
     #   -c requirements/train.txt
+    #   numpy-typing-compat
+    #   optype
     #   pandas-stubs
+numpy-typing-compat==20260602.2.5 \
+    --hash=sha256:1885a678e9a24564839ed5d1711c0031735fb7de7f0b5ed88d550e5d45a8d4f9 \
+    --hash=sha256:21ba7757c8924d359a9ed3ab2163c282a70983ae64498fdba6d1892a6641c8b1
+    # via optype
+optype==0.19.0 \
+    --hash=sha256:31bff7d2e51e88916a11affed80dbe306ca9e74c76b93b143f1355bb127a7a8c \
+    --hash=sha256:50ce4c0ca419026eeae4130dc90c6a0b9a0b54ffe1d940fc26e8d0058903de4c
+    # via scipy-stubs
 packageurl-python==0.17.6 \
     --hash=sha256:1252ce3a102372ca6f86eb968e16f9014c4ba511c5c37d95a7f023e2ca6e5c25 \
     --hash=sha256:31a85c2717bc41dd818f3c62908685ff9eebcb68588213745b14a6ee9e7df7c9
@@ -1717,6 +1727,10 @@ ruff==0.16.10 \
     --hash=sha256:eff4728c4eaae93f0955cd264d24b2ab348e74bf59986ccf282ba6dc16b3b017 \
     --hash=sha256:f33f43a864a8483eebd160e713336c8bab02c934feaff0a33cf5ccb41546d09a
     # via -r requirements/dev.in
+scipy-stubs==1.18.1.1 \
+    --hash=sha256:1a48be1702cad1ae9aa850c62ed157c988d990305880511d0e38994d502664f4 \
+    --hash=sha256:87995ba945f04a3c3fb9cdb5c06d093cf3637ca1271ae6799eb8030b63fb2263
+    # via -r requirements/dev.in
 six==1.17.0 \
     --hash=sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274 \
     --hash=sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81
@@ -1855,6 +1869,7 @@ typing-extensions==4.16.0 \
     #   cyclonedx-python-lib
     #   jupyter-client
     #   mypy
+    #   optype
     #   referencing
 urllib3==2.8.0 \
     --hash=sha256:0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3 \

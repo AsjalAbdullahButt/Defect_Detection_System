@@ -7,7 +7,7 @@ RUN := uv run
 DATA_DIR ?= data/raw
 
 .DEFAULT_GOAL := help
-.PHONY: help lock setup setup-serve lint format typecheck test inspect manifest split audit data eda train
+.PHONY: help lock setup setup-serve lint format typecheck test inspect manifest split audit data eda train calibrate
 
 help: ## List available targets
 	@uv run --no-project python -c "import re; [print(f'{m[0]:<14} {m[1]}') for m in re.findall(r'^([a-z-]+):.*?## (.*)$$', open('Makefile').read(), re.M)]"
@@ -61,3 +61,6 @@ eda: ## Execute notebooks/01_eda.ipynb in place (train+val only)
 
 train: ## Two-stage fine-tuning -> runs/<stamp>_<config-hash>/best.pt (+ curves, summary)
 	$(RUN) defect-detection train
+
+calibrate: ## Temperature + threshold + review band on VAL for runs/LATEST -> model_meta.candidate.json
+	$(RUN) defect-detection calibrate

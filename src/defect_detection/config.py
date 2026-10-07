@@ -104,6 +104,30 @@ class TrainConfig(_Strict):
     class_weighting: Literal["balanced", "none"]
 
 
+class CostConfig(_Strict):
+    """Relative per-image costs used only to illustrate trade-offs in reports."""
+
+    missed_defect: float = Field(ge=0)
+    false_alarm: float = Field(ge=0)
+    review: float = Field(ge=0)
+
+
+class OperatingPointConfig(_Strict):
+    """Threshold policy, applied to calibrated validation probabilities."""
+
+    ece_bins: int = Field(ge=5, le=50)
+    min_defect_recall: float = Field(gt=0, le=1)
+    review_low_recall: float = Field(gt=0, le=1)
+    review_high_precision: float = Field(gt=0, le=1)
+    costs: CostConfig
+
+    @model_validator(mode="after")
+    def _band_recall_not_looser(self) -> "OperatingPointConfig":
+        if self.review_low_recall < self.min_defect_recall:
+            raise ValueError("review_low_recall must be >= min_defect_recall")
+        return self
+
+
 class ProjectConfig(_Strict):
     """Root of configs/train.yaml."""
 
@@ -115,6 +139,7 @@ class ProjectConfig(_Strict):
     augment: AugmentConfig
     model: ModelConfig
     train: TrainConfig
+    operating_point: OperatingPointConfig
 
 
 def load_config(path: Path) -> ProjectConfig:

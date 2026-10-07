@@ -113,19 +113,27 @@ def load_checkpoint(path: Path) -> dict[str, Any]:
 
 
 @torch.no_grad()
+def collect_logits(
+    model: nn.Module, loader: DataLoader[tuple[torch.Tensor, int]], device: torch.device
+) -> tuple[npt.NDArray[np.int64], npt.NDArray[np.float64]]:
+    """Labels and raw logits (n, 2) over a loader, in eval mode."""
+    model.eval()
+    labels, logits = [], []
+    for images, targets in loader:
+        logits.append(model(images.to(device)).float().cpu().numpy())
+        labels.append(targets.numpy())
+    return np.concatenate(labels).astype(np.int64), np.concatenate(logits).astype(np.float64)
+
+
 def predict(
     model: nn.Module, loader: DataLoader[tuple[torch.Tensor, int]], device: torch.device
 ) -> tuple[npt.NDArray[np.int64], npt.NDArray[np.float64], float]:
     """Labels, P(defective) and mean (unweighted) cross-entropy over a loader."""
-    model.eval()
-    labels, probs, loss_sum = [], [], 0.0
-    for images, targets in loader:
-        logits = model(images.to(device))
-        loss_sum += nn.functional.cross_entropy(logits, targets.to(device), reduction="sum").item()
-        probs.append(torch.softmax(logits.float(), dim=1)[:, DEFECTIVE_LABEL].cpu().numpy())
-        labels.append(targets.numpy())
-    all_labels = np.concatenate(labels).astype(np.int64)
-    return all_labels, np.concatenate(probs).astype(np.float64), loss_sum / len(all_labels)
+    labels, logits = collect_logits(model, loader, device)
+    log_probs = torch.log_softmax(torch.from_numpy(logits), dim=1)
+    loss = float(nn.functional.nll_loss(log_probs, torch.from_numpy(labels)).item())
+    probs = log_probs.exp()[:, DEFECTIVE_LABEL].numpy().astype(np.float64)
+    return labels, probs, loss
 
 
 def train_one_epoch(

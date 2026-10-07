@@ -11,3 +11,4 @@ types-pyyaml>=6.0
 pandas-stubs>=2.2
 nbconvert>=7.16
 ipykernel>=6.29
+scipy-stubs>=1.13

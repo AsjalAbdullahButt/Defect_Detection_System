@@ -151,3 +151,41 @@ Format: **Decision · Alternatives · Why · Trade-off**. One entry per non-triv
 - **Alternatives:** pickling the full model; safetensors plus a sidecar JSON.
 - **Why:** `weights_only=True` refuses to unpickle arbitrary objects, so a tampered checkpoint can't execute code. Keeping metadata as plain JSON (config, config hash, git commit, epoch, val metrics) keeps it to one self-describing file.
 - **Trade-off:** torch-specific. Serving never loads it anyway: it uses ONNX (V5).
+
+## V3 — Calibration & operating point (validation only)
+
+### D-025 Temperature scaling (one parameter) rather than Platt or isotonic calibration
+
+- **Alternatives:** Platt scaling (2 parameters), isotonic regression, no calibration.
+- **Why:** dividing logits by a single T can't change the ranking or the argmax, so PR-AUC and ROC-AUC are untouched and only the probabilities move. One parameter fit on about 1k val images can barely overfit. It's needed because class-weighted training deliberately skews the probabilities (D-022), and the review band and the API's `confidence` field need probabilities that mean what they say.
+- **Trade-off:** it can't fix a shifted base rate (that would need Platt's bias term). Calibration is measured, so a poor fit would show up in the reliability diagram.
+
+### D-026 Guards on the fit: separable validation keeps T = 1; a fit on its search bound is flagged
+
+- **Alternatives:** always use the fitted value.
+- **Why:** if every val defect outscores every normal, NLL keeps decreasing as T → 0, which would make the model arbitrarily overconfident. With zero errors, the data can't support sharpening. A fit stuck at the [0.05, 20] bound means the model carries little signal or val is too small; the report says so instead of hiding it (seen in the synthetic smoke run).
+- **Trade-off:** on a separable val set the probabilities stay as trained, i.e. uncalibrated; this is reported.
+
+### D-027 Calibration measured on P(defective) with 15 equal-width bins
+
+- **Alternatives:** top-label ECE (confidence of the predicted class); adaptive (equal-mass) bins.
+- **Why:** the threshold and the review band act on P(defective), so that is the quantity whose reliability matters. Equal-width bins match the standard reliability diagram and are easy to read in an interview.
+- **Trade-off:** sparse middle bins are noisy on an easy dataset. Bin counts are kept so sparse bins can be discounted.
+
+### D-028 Threshold: best precision subject to val defect recall ≥ 0.99; ties go to the lowest threshold
+
+- **Alternatives:** 0.5; the F1-optimal threshold; minimising expected cost.
+- **Why:** recall is the business constraint, since a shipped defect costs far more than a re-inspected good part. Among thresholds meeting it, precision (fewer false alarms) is maximised. When val is nearly separable many thresholds tie; the lowest catches the most defects at no val precision cost. The 0.5 and F1-optimal thresholds are reported for comparison.
+- **Trade-off:** "recall ≥ 0.99 on val" is a point estimate (it allows 1 miss per 100 val defects); the test-set result in V4 is the honest check.
+
+### D-029 Review band [low, high) around the threshold
+
+- **Alternatives:** a fixed ±0.1 band; flagging by entropy; no band.
+- **Why:** both edges come from business targets, not magic numbers. Below `low`, ≥ 99.9% of val defects would still be flagged. At or above `high`, flagged images are defective with ≥ 99.5% precision. `predicted_class` always uses the threshold; the band only adds `needs_review`. The report shows how many images go to review and how many of the threshold's errors the band catches.
+- **Trade-off:** on a near-perfect val set the band can collapse to almost nothing. That is reported rather than padded artificially.
+
+### D-030 Temperature and threshold fit on the same val set; costs are illustrative
+
+- **Alternatives:** split val into a calibration half and a threshold half.
+- **Why:** halving an already small val set would make both estimates noisier. Temperature scaling preserves ranking, so threshold selection isn't biased by it beyond the shared sample. The 20 : 1 : 0.25 costs (missed defect : false alarm : review) are labelled illustrative and live in config; they only populate a comparison table.
+- **Trade-off:** val metrics at the chosen threshold are optimistic. Test (V4) gives the unbiased estimate.

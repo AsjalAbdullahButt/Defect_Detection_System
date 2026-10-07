@@ -64,3 +64,17 @@ train:
   weight_decay: 1.0e-4
   early_stopping_patience: 4
   class_weighting: balanced # weighted cross-entropy, weights fit on train split only
+
+operating_point:
+  # Everything here is fit on VALIDATION predictions only (never test).
+  ece_bins: 15
+  # Decision threshold: best precision among thresholds catching >= 99% of val defects.
+  min_defect_recall: 0.99
+  # Review band [low, high): below low at least 99.9% of val defects would still be caught;
+  # at/above high, flagged images are defective with >= 99.5% precision.
+  review_low_recall: 0.999
+  review_high_precision: 0.995
+  costs:                    # illustrative relative costs per image, only for the cost table
+    missed_defect: 20       # faulty part reaches a customer
+    false_alarm: 1          # good part scrapped or re-inspected
+    review: 0.25            # a person looks at one image
