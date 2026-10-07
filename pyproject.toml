@@ -1,0 +1,124 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "defect-detection"
+version = "0.1.0"
+description = "Visual defect detection: transfer-learned classifier, leakage-safe data pipeline, hardened ONNX inference API."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12,<3.13"
+authors = [{ name = "AsjalAbdullahButt" }]
+# Dependencies are declared ONLY in requirements/*.in (single source of truth);
+# requirements/*.txt are the hash-pinned lockfiles compiled from them.
+dynamic = ["dependencies", "optional-dependencies"]
+
+[project.scripts]
+defect-detection = "defect_detection.cli:app"
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements/base.in"] }
+
+[tool.setuptools.dynamic.optional-dependencies]
+serve = { file = ["requirements/serve.in"] }
+train = { file = ["requirements/train.in"] }
+dev = { file = ["requirements/dev.in"] }
+anomaly = { file = ["requirements/anomaly.in"] }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# uv is used as a fast venv/installer + pip-compile, not as a project manager:
+# lockfiles live in requirements/*.txt, so `uv run` must not create/sync uv.lock.
+[tool.uv]
+managed = false
+
+# ---------------------------------------------------------------- ruff
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+extend-include = ["*.ipynb"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F",   # pycodestyle, pyflakes
+    "I",             # isort
+    "N",             # pep8-naming
+    "UP",            # pyupgrade
+    "B",             # bugbear
+    "S",             # bandit-lite security checks
+    "C4", "SIM", "RUF",
+    "PT",            # pytest style
+    "TID",           # banned imports (architecture boundary, see below)
+    "D",             # docstrings on public API
+    "ANN",           # type annotations everywhere
+]
+ignore = [
+    "D105", "D107",  # magic methods / __init__ documented at class level
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["defect_detection", "tests"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+# Architecture boundary: core/ and serving/ must stay torch-free.
+# torch/torchvision/timm are banned project-wide and re-allowed only where training lives.
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"torch".msg = "torch is only allowed in data/dataset.py, data/augment.py and training/ (serving and core must stay torch-free)."
+"torchvision".msg = "torchvision is only allowed in data/augment.py and training/."
+"timm".msg = "timm is only allowed in training/."
+
+[tool.ruff.lint.per-file-ignores]
+"src/defect_detection/training/**" = ["TID251"]
+"src/defect_detection/data/dataset.py" = ["TID251"]
+"src/defect_detection/data/augment.py" = ["TID251"]
+"tests/**" = ["S101", "D", "ANN", "TID251"]
+"notebooks/**" = ["D", "ANN"]
+
+# ---------------------------------------------------------------- mypy
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "src"
+packages = ["defect_detection"]
+# Baseline for the whole package: every function fully annotated.
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+strict_equality = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unused_configs = true
+
+# core/ and serving/ get the remaining --strict flags (mypy's `strict` is global-only).
+[[tool.mypy.overrides]]
+module = ["defect_detection.core.*", "defect_detection.serving.*"]
+disallow_any_generics = true
+disallow_untyped_calls = true
+disallow_untyped_decorators = true
+disallow_subclassing_any = true
+warn_return_any = true
+no_implicit_reexport = true
+extra_checks = true
+
+# ---------------------------------------------------------------- pytest / coverage
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = ["--import-mode=importlib", "-ra", "--strict-markers"]
+markers = [
+    "slow: long-running tests (training, benchmarks)",
+    "requires_data: needs the real dataset in data/raw",
+]
+
+[tool.coverage.run]
+source = ["defect_detection"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true

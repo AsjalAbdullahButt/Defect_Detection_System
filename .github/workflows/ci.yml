@@ -1,0 +1,23 @@
+# V0 scope: lint, type-check, tests. Security scans, leakage gate, image build + trivy land in V7/V8.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - name: Install (hash-verified lockfiles)
+        run: make setup
+      - name: Lint and type-check
+        run: make lint
+      - name: Tests
+        run: make test

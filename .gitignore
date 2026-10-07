@@ -1,0 +1,79 @@
+# Python / tooling
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.ipynb_checkpoints/
+
+# Secrets: never commit real env files (examples are allowed)
+.env
+*.env
+!.env.example
+!configs/serve.env.example
+
+# Data: only the README and folder placeholders are tracked
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# Model artifacts and checkpoints
+models/*
+!models/.gitkeep
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.safetensors
+runs/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Credentials / keys: never commit
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+id_rsa*
+id_ed25519*
+kaggle.json
+credentials*.json
+service-account*.json
+secrets/
+.secrets*
+*.secret
+
+# Generated reports (contain local absolute paths / dataset details); placeholders only
+reports/*.json
+reports/error_analysis/*
+!reports/error_analysis/.gitkeep
+reports/figures/*
+!reports/figures/.gitkeep
+
+# Experiment tracking / logs
+mlruns/
+wandb/
+lightning_logs/
+outputs/
+logs/
+*.log
+
+# Local AI-assistant / tooling state
+.claude/
+CLAUDE.local.md
+.env.local
+*.local.yaml

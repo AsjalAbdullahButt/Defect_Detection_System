@@ -1,0 +1,6 @@
+# All training/data hyperparameters live here. Sections are added as each version lands.
+seed: 42
+
+data:
+  raw_dir: data/raw
+  processed_dir: data/processed

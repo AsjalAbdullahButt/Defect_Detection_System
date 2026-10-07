@@ -1,0 +1,2 @@
+# Optional PatchCore baseline (V4). Intentionally empty until then: the first choice is a
+# small in-repo PatchCore on timm features (no new deps); anomalib is added here only if needed.

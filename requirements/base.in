@@ -1,0 +1,4 @@
+# Shared by core/ (used by both training and serving). Loose lower bounds; exact pins live in *.txt.
+numpy>=2.1
+pillow>=11.0
+pydantic>=2.9

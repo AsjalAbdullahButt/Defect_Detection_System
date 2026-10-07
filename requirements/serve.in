@@ -1,0 +1,8 @@
+# Inference API runtime. MUST NOT contain torch (see tests + ruff TID251 boundary).
+fastapi>=0.115
+uvicorn>=0.32
+python-multipart>=0.0.18
+pydantic-settings>=2.6
+onnxruntime>=1.20
+prometheus-client>=0.21
+slowapi>=0.1.9
