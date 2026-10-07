@@ -1,6 +1,25 @@
-# All training/data hyperparameters live here. Sections are added as each version lands.
+# All data/training hyperparameters. Validated by defect_detection.config (unknown keys fail).
 seed: 42
 
 data:
   raw_dir: data/raw
   processed_dir: data/processed
+  # Raw class-folder name -> class name (normal | defective). Unmapped folders fail the
+  # manifest step instead of being guessed.
+  class_aliases:
+    def_front: defective
+    ok_front: normal
+
+dedupe:
+  # Max Hamming distance (of 64 bits) between pHashes, minimised over 8 rotations/flips, for
+  # two images to count as near-duplicates. 4 = >=94% identical bits: catches re-encodes,
+  # resizes and rotated/flipped copies while staying strict enough not to merge distinct parts
+  # in a visually homogeneous dataset. The audit reports counts at 2x for sensitivity.
+  phash_hamming_threshold: 4
+
+split:
+  strategy: auto            # auto = official if the raw data has a test folder, else random
+  train: 0.70               # used by the random strategy
+  val: 0.15
+  test: 0.15
+  val_fraction_of_official_train: 0.15   # used by the official strategy

@@ -7,7 +7,7 @@ RUN := uv run
 DATA_DIR ?= data/raw
 
 .DEFAULT_GOAL := help
-.PHONY: help lock setup setup-serve lint format typecheck test inspect
+.PHONY: help lock setup setup-serve lint format typecheck test inspect manifest split audit data eda
 
 help: ## List available targets
 	@uv run --no-project python -c "import re; [print(f'{m[0]:<14} {m[1]}') for m in re.findall(r'^([a-z-]+):.*?## (.*)$$', open('Makefile').read(), re.M)]"
@@ -44,3 +44,17 @@ test: ## Run the test suite with coverage
 
 inspect: ## Inventory the raw dataset (override with DATA_DIR=...)
 	$(RUN) defect-detection inspect $(DATA_DIR) --json-out reports/inventory.json
+
+manifest: ## Hash every image (SHA-256 + rotation/flip pHash) -> data/processed/manifest.csv
+	$(RUN) defect-detection manifest
+
+split: ## Dedupe clusters + group-aware stratified split -> data/processed/splits.csv
+	$(RUN) defect-detection split
+
+audit: ## Leakage audit (fails on any cross-split overlap) -> data/processed/leakage_audit.json
+	$(RUN) defect-detection audit
+
+data: manifest split audit ## Full data pipeline: manifest -> split -> audit
+
+eda: ## Execute notebooks/01_eda.ipynb in place (train+val only)
+	$(RUN) jupyter nbconvert --to notebook --execute --inplace notebooks/01_eda.ipynb

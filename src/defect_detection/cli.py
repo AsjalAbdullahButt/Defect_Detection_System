@@ -8,9 +8,16 @@ import json
 from pathlib import Path
 from typing import Annotated
 
+import pandas as pd
 import typer
 
+from defect_detection.config import load_config
+from defect_detection.data.dedupe import cluster_images
 from defect_detection.data.inventory import format_report, scan_dataset, summarize
+from defect_detection.data.leakage_audit import run_audit
+from defect_detection.data.manifest import build_manifest
+from defect_detection.data.split import make_splits
+from defect_detection.provenance import provenance
 
 app = typer.Typer(no_args_is_help=True, add_completion=False, help=__doc__)
 
@@ -43,22 +50,74 @@ def _not_yet(version: str) -> None:
     raise typer.Exit(code=2)
 
 
-@app.command()
-def manifest() -> None:
-    """Build manifest.csv with SHA-256 and perceptual hashes (V1)."""
-    _not_yet("V1")
+ConfigOption = Annotated[
+    Path, typer.Option("--config", exists=True, dir_okay=False, help="Project YAML config.")
+]
+DEFAULT_CONFIG = Path("configs/train.yaml")
+
+
+def _write_json(path: Path, payload: dict[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    typer.echo(f"wrote {path}")
 
 
 @app.command()
-def split() -> None:
-    """Create the group-aware stratified split (V1)."""
-    _not_yet("V1")
+def manifest(config_path: ConfigOption = DEFAULT_CONFIG) -> None:
+    """Build manifest.csv: SHA-256 + rotation/flip pHashes per image (corrupt files excluded)."""
+    config = load_config(config_path)
+    table, inventory = build_manifest(config.data.raw_dir, config.data.class_aliases)
+    out = config.data.processed_dir
+    out.mkdir(parents=True, exist_ok=True)
+    table.to_csv(out / "manifest.csv", index=False)
+    typer.echo(f"wrote {out / 'manifest.csv'} ({len(table)} images)")
+    _write_json(
+        out / "manifest_report.json",
+        {
+            **provenance(config),
+            "n_images": len(table),
+            "n_corrupt_excluded": len(inventory.corrupt),
+            "corrupt_files": [r.rel_path for r in inventory.corrupt],
+            "counts": table.groupby(["source_split", "class_name"])
+            .size()
+            .unstack(fill_value=0)
+            .to_dict(orient="index"),
+        },
+    )
 
 
 @app.command()
-def audit() -> None:
-    """Run the leakage audit across splits (V1)."""
-    _not_yet("V1")
+def split(config_path: ConfigOption = DEFAULT_CONFIG) -> None:
+    """Cluster duplicates and write the group-aware stratified splits.csv."""
+    config = load_config(config_path)
+    out = config.data.processed_dir
+    table = pd.read_csv(out / "manifest.csv")
+    cluster_id, dedupe_report = cluster_images(table, config.dedupe.phash_hamming_threshold)
+    splits, split_report = make_splits(table, cluster_id, config.split, config.seed)
+    splits.to_csv(out / "splits.csv", index=False)
+    typer.echo(f"wrote {out / 'splits.csv'}")
+    _write_json(
+        out / "split_report.json",
+        {**provenance(config), "dedupe": dedupe_report, "split": split_report},
+    )
+    typer.echo(json.dumps(split_report["counts"], indent=2))
+
+
+@app.command()
+def audit(config_path: ConfigOption = DEFAULT_CONFIG) -> None:
+    """Re-check splits for leakage; exits 1 if any check fails."""
+    config = load_config(config_path)
+    out = config.data.processed_dir
+    table = pd.read_csv(out / "manifest.csv")
+    splits = pd.read_csv(out / "splits.csv", keep_default_na=False)
+    result = run_audit(table, splits, config.dedupe.phash_hamming_threshold)
+    _write_json(out / "leakage_audit.json", {**provenance(config), **result})
+    for name, ok in result["checks"].items():
+        typer.echo(f"  {'PASS' if ok else 'FAIL'}  {name}")
+    if not result["passed"]:
+        typer.echo("Leakage audit FAILED", err=True)
+        raise typer.Exit(code=1)
+    typer.echo(f"Leakage audit passed. test_set_sha256={result['test_set_sha256']}")
 
 
 @app.command()

@@ -94,6 +94,11 @@ warn_unused_ignores = true
 warn_redundant_casts = true
 warn_unused_configs = true
 
+# Third-party libraries without type information.
+[[tool.mypy.overrides]]
+module = ["imagehash", "sklearn.*"]
+ignore_missing_imports = true
+
 # core/ and serving/ get the remaining --strict flags (mypy's `strict` is global-only).
 [[tool.mypy.overrides]]
 module = ["defect_detection.core.*", "defect_detection.serving.*"]

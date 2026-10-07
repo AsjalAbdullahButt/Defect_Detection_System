@@ -1,10 +1,19 @@
 """Shared fixtures. All images are generated on the fly; no real data is committed."""
 
+from dataclasses import dataclass
 from pathlib import Path
 
+import matplotlib
+import pandas as pd
 import pytest
 
-from tests.fixtures.synthetic import write_image
+from defect_detection.config import ProjectConfig
+from defect_detection.data.dedupe import cluster_images
+from defect_detection.data.manifest import build_manifest
+from defect_detection.data.split import make_splits
+from tests.fixtures.synthetic import build_planted_dataset, write_image
+
+matplotlib.use("Agg")  # headless plotting in tests
 
 
 @pytest.fixture
@@ -21,3 +30,63 @@ def casting_like_dataset(tmp_path: Path) -> Path:
     good.write_bytes(good.read_bytes()[:400])
     (root / "notes.txt").write_text("not an image", encoding="utf-8")
     return root
+
+
+def make_config(root: Path, strategy: str = "auto", seed: int = 42) -> ProjectConfig:
+    """Project config pointing at a temporary raw/processed pair."""
+    return ProjectConfig.model_validate(
+        {
+            "seed": seed,
+            "data": {
+                "raw_dir": root / "raw",
+                "processed_dir": root / "processed",
+                "class_aliases": {"def_front": "defective", "ok_front": "normal"},
+            },
+            "dedupe": {"phash_hamming_threshold": 4},
+            "split": {
+                "strategy": strategy,
+                "train": 0.7,
+                "val": 0.15,
+                "test": 0.15,
+                "val_fraction_of_official_train": 0.15,
+            },
+        }
+    )
+
+
+@dataclass
+class PipelineRun:
+    """Outputs of manifest -> cluster -> split on a planted dataset."""
+
+    config: ProjectConfig
+    cases: dict[str, str]
+    manifest: pd.DataFrame
+    dedupe_report: dict[str, object]
+    splits: pd.DataFrame
+    split_report: dict[str, object]
+
+    def row(self, case: str) -> pd.Series:
+        """The splits.csv row for a planted case."""
+        return self.splits.set_index("rel_path").loc[self.cases[case]]
+
+
+def run_pipeline(root: Path, with_official_test: bool) -> PipelineRun:
+    """Build a planted dataset under ``root`` and run the data pipeline in memory."""
+    config = make_config(root)
+    cases = build_planted_dataset(config.data.raw_dir, with_official_test)
+    manifest, _ = build_manifest(config.data.raw_dir, config.data.class_aliases)
+    cluster_id, dedupe_report = cluster_images(manifest, config.dedupe.phash_hamming_threshold)
+    splits, split_report = make_splits(manifest, cluster_id, config.split, config.seed)
+    return PipelineRun(config, cases, manifest, dedupe_report, splits, split_report)
+
+
+@pytest.fixture(scope="module")
+def official_run(tmp_path_factory: pytest.TempPathFactory) -> PipelineRun:
+    """Planted dataset with an official test folder (official strategy)."""
+    return run_pipeline(tmp_path_factory.mktemp("official"), with_official_test=True)
+
+
+@pytest.fixture(scope="module")
+def random_run(tmp_path_factory: pytest.TempPathFactory) -> PipelineRun:
+    """Planted dataset without split folders (random strategy)."""
+    return run_pipeline(tmp_path_factory.mktemp("random"), with_official_test=False)
