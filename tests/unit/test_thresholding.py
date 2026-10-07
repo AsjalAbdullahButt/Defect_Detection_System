@@ -18,19 +18,32 @@ def test_operating_point_counts() -> None:
     assert p.recall == pytest.approx(0.8)
 
 
+def logit(p: float) -> float:
+    return float(np.log(p / (1 - p)))
+
+
 def test_threshold_for_recall_meets_the_constraint() -> None:
     t = th.threshold_for_recall(LABELS, PROBS, min_recall=1.0)
-    assert t == pytest.approx(0.30)
+    assert 0.2 < t < 0.30  # inside the empty interval below the lowest defect (0.30)
     assert th.operating_point("t", LABELS, PROBS, t).recall == 1.0
     t90 = th.threshold_for_recall(LABELS, PROBS, min_recall=0.9)
     assert th.operating_point("t", LABELS, PROBS, t90).recall >= 0.9
 
 
-def test_ties_go_to_the_lowest_threshold() -> None:
+def test_ties_resolve_to_the_max_margin_point() -> None:
+    """Separable: every t in (0.3, 0.8] is perfect; the logit midpoint of the gap is chosen."""
     labels = np.array([1, 1, 0, 0])
-    probs = np.array([0.9, 0.8, 0.3, 0.2])  # separable: any t in (0.3, 0.8] is perfect
-    assert th.threshold_for_recall(labels, probs, 0.99) == pytest.approx(0.8)
-    assert th.max_threshold_with_recall(labels, probs, 0.99) == pytest.approx(0.8)
+    probs = np.array([0.9, 0.8, 0.3, 0.2])
+    expected = 1 / (1 + np.exp(-(logit(0.3) + logit(0.8)) / 2))
+    t = th.threshold_for_recall(labels, probs, 0.99)
+    assert t == pytest.approx(expected)
+    same = th.operating_point("a", labels, probs, t), th.operating_point("b", labels, probs, 0.8)
+    assert (same[0].tp, same[0].fp, same[0].fn) == (same[1].tp, same[1].fp, same[1].fn)
+    assert th.max_threshold_with_recall(labels, probs, 0.99) == pytest.approx(expected)
+
+
+def test_margin_threshold_without_lower_scores_is_unchanged() -> None:
+    assert th.margin_threshold(np.array([0.4, 0.7]), 0.4) == 0.4
 
 
 def test_f1_optimal_threshold() -> None:

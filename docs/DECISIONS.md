@@ -311,3 +311,29 @@ Format: **Decision · Alternatives · Why · Trade-off**. One entry per non-triv
 - **Alternatives:** partial batch results with per-item errors; confidence = max(p, 1 − p).
 - **Why:** all-or-nothing keeps the contract simple and avoids silently half-processed batches. The error names the problem and the client fixes the file. Confidence follows the decision: with a threshold below 0.5, an image just above the threshold is "defective" with confidence < 0.5. That's honest, and those images are always inside the review band (`needs_review: true`).
 - **Trade-off:** one bad file costs the client a resubmission of the batch.
+
+## V7 — Security hardening
+
+### D-050 Auth and rate limiting as ASGI middleware, not FastAPI dependencies or slowapi decorators
+
+- **Alternatives:** `Depends(require_api_key)` on the router; slowapi `@limiter.limit` decorators.
+- **Why:** FastAPI parses the multipart body *before* it runs route dependencies (confirmed in `fastapi/routing.py`), so dependency-based auth would let an anonymous client make the server parse a 5 MB upload before replying 401. As middleware, both reject before a single body byte is read. A test sends an oversized anonymous upload and gets 401, not 413. The limiter uses the `limits` library (the engine slowapi wraps) directly, so slowapi was dropped from `serve.in`.
+- **Trade-off:** two small classes of our own instead of a decorator, but the behaviour is explicit and tested.
+
+### D-051 API keys: several keys, ≥ 32 chars, constant-time comparison against all of them, production fails closed
+
+- **Alternatives:** a single key; plain `==`; auth off by default.
+- **Why:** several keys allow rotation without downtime. `hmac.compare_digest` on every key (no early exit on a match) avoids timing leaks. Missing and wrong keys get the identical 401. Failed attempts are limited per IP. Production refuses to start without keys unless `DD_ALLOW_UNAUTHENTICATED=true` is set, so an open API is always a deliberate choice. Keys are `SecretStr` and only a SHA-256 fingerprint ever reaches logs or limiter keys.
+- **Trade-off:** shared static secrets, no per-client scopes or expiry (an identity provider is the upgrade path; see SECURITY.md).
+
+### D-052 Strict security headers everywhere; CORS off by default; relaxed CSP only for the dev docs
+
+- **Alternatives:** no headers (it's "just an API"); CORS `*`.
+- **Why:** the headers cost nothing and close browser-side attack classes if the API is ever opened in a browser or embedded. `CSP: default-src 'none'` suits a JSON API. The Swagger UI needs scripts, so it gets no CSP, and it only exists outside production. CORS is an explicit allow-list with no credentials.
+- **Trade-off:** a web front end on another origin needs its origin added to `DD_CORS_ORIGINS`.
+
+### D-053 bandit findings handled with justified `# nosec`, not a blanket skip
+
+- **Alternatives:** skip B404/B603 project-wide.
+- **Why:** the only findings were fixed-argument `git` calls in the training-side provenance helper. A per-line `# nosec B603` with the reason keeps any *new* subprocess call anywhere flagged by CI.
+- **Trade-off:** a slightly noisy line in `provenance.py`.

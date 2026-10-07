@@ -1,7 +1,7 @@
 """Provenance stamped into every generated artifact: git commit, config hash, timestamp."""
 
 import shutil
-import subprocess
+import subprocess  # nosec B404 - only fixed git commands, see git_commit()
 from datetime import UTC, datetime
 
 from defect_detection.config import ProjectConfig, config_hash
@@ -14,10 +14,10 @@ def git_commit() -> str:
         return "unknown"
     try:
         # Fixed argument lists, no user input: safe to run without a shell.
-        sha = subprocess.run(  # noqa: S603
+        sha = subprocess.run(  # noqa: S603  # nosec B603 - fixed args, absolute git path
             [git, "rev-parse", "HEAD"], capture_output=True, text=True, check=True
         ).stdout.strip()
-        dirty = subprocess.run(  # noqa: S603
+        dirty = subprocess.run(  # noqa: S603  # nosec B603 - fixed args, absolute git path
             [git, "status", "--porcelain", "--untracked-files=no"],
             capture_output=True,
             text=True,

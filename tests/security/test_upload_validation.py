@@ -15,8 +15,12 @@ from tests.fixtures.serving import ExportedModel, make_settings
 from tests.fixtures.synthetic import smooth_image
 
 SETTINGS = Settings(
-    model_dir="unused", metrics_port=None, min_image_side=16, max_image_pixels=4_000_000
-)  # type: ignore[arg-type]
+    model_dir="unused",  # type: ignore[arg-type]
+    environment="development",
+    metrics_port=None,
+    min_image_side=16,
+    max_image_pixels=4_000_000,
+)
 
 
 def encode(img: Image.Image, fmt: str, **kwargs: object) -> bytes:

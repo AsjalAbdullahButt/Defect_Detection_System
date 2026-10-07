@@ -5,4 +5,4 @@ python-multipart>=0.0.18
 pydantic-settings>=2.6
 onnxruntime>=1.20
 prometheus-client>=0.21
-slowapi>=0.1.9
+limits>=3.13

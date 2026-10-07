@@ -21,10 +21,12 @@ from tests.fixtures.synthetic import smooth_image
 def test_settings_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DD_MODEL_DIR", "models/v1")
     monkeypatch.setenv("DD_MAX_BATCH_FILES", "4")
+    monkeypatch.setenv("DD_API_KEYS", "k" * 32)
     settings = Settings()  # type: ignore[call-arg]
     assert settings.max_batch_files == 4
-    assert settings.environment == "production"
+    assert settings.environment == "production"  # the default
     assert not settings.docs_enabled
+    assert settings.auth_enabled
 
 
 def test_settings_fail_fast(monkeypatch: pytest.MonkeyPatch) -> None:

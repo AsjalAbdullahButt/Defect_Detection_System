@@ -121,7 +121,9 @@ def test_missing_file_gives_422_without_echo(client: TestClient) -> None:
 
 
 def test_docs_disabled_in_production(exported_model: ExportedModel) -> None:
-    prod = make_settings(exported_model.model_dir, environment="production")
+    prod = make_settings(
+        exported_model.model_dir, environment="production", allow_unauthenticated=True
+    )
     with TestClient(create_app(prod)) as client:
         assert client.get("/docs").status_code == 404
         assert client.get("/openapi.json").status_code == 404

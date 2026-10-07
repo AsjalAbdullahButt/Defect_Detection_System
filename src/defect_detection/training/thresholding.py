@@ -63,19 +63,39 @@ def _candidates(labels: IntArray, probs: FloatArray) -> tuple[FloatArray, FloatA
     return precision[:-1], recall[:-1], thresholds  # last point has no threshold
 
 
-def threshold_for_recall(labels: IntArray, probs: FloatArray, min_recall: float) -> float:
-    """Highest-precision threshold with recall >= min_recall.
+def _logit(p: float) -> float:
+    q = min(max(p, 1e-12), 1 - 1e-12)
+    return float(np.log(q / (1 - q)))
 
-    Ties (several thresholds with the same best precision, common when validation is nearly
-    separable) go to the LOWEST one: it catches the most defects at no precision cost on val,
-    and a missed defect costs far more than a false alarm.
+
+def margin_threshold(probs: FloatArray, candidate: float) -> float:
+    """Max-margin version of a score-valued threshold.
+
+    A threshold equal to an observed score ``c`` gives exactly the same decisions on this data
+    as any value in (s_below, c], where s_below is the largest score under c. Sitting AT c
+    leaves zero margin on one side, so return the midpoint of that empty interval in logit
+    space: as far as possible from the images on both sides.
+    """
+    below = probs[probs < candidate]
+    if below.size == 0:
+        return candidate
+    midpoint = (_logit(float(below.max())) + _logit(candidate)) / 2
+    return float(1 / (1 + np.exp(-midpoint)))
+
+
+def threshold_for_recall(labels: IntArray, probs: FloatArray, min_recall: float) -> float:
+    """Highest-precision threshold with recall >= min_recall, placed at maximum margin.
+
+    Among tied candidates (common when validation is nearly separable) the lowest one keeps
+    the most defects; it is then moved to the middle of the empty score interval below it
+    (see ``margin_threshold``), so neither class sits right at the decision boundary.
     """
     precision, recall, thresholds = _candidates(labels, probs)
     ok = recall >= min_recall
     if not ok.any():
         raise ValueError(f"no threshold reaches recall {min_recall}")
     best = np.flatnonzero(ok & (precision == precision[ok].max()))
-    return float(thresholds[best].min())
+    return margin_threshold(probs, float(thresholds[best].min()))
 
 
 def f1_optimal_threshold(labels: IntArray, probs: FloatArray) -> float:
@@ -95,12 +115,12 @@ def threshold_for_precision(
 
 
 def max_threshold_with_recall(labels: IntArray, probs: FloatArray, min_recall: float) -> float:
-    """Highest threshold that still keeps recall >= min_recall."""
+    """Highest threshold that still keeps recall >= min_recall (placed at maximum margin)."""
     _, recall, thresholds = _candidates(labels, probs)
     ok = recall >= min_recall
     if not ok.any():
         raise ValueError(f"no threshold reaches recall {min_recall}")
-    return float(thresholds[ok].max())
+    return margin_threshold(probs, float(thresholds[ok].max()))
 
 
 def review_band(
