@@ -107,7 +107,10 @@ export:
   models_dir: models        # gitignored; models/<model_version>/{model.onnx, model_meta.json, SHA256SUMS}
   opset: 17
   parity_images: 32         # VAL images compared PyTorch vs ONNX Runtime (never test)
-  parity_atol: 1.0e-4       # max |logit difference| allowed
+  # np.allclose rule: |torch - onnx| <= atol + rtol * |torch logit|. Confident logits (~+-30)
+  # carry ~1e-4 of float32 rounding, so a pure absolute bound would reject a correct export.
+  parity_atol: 1.0e-4
+  parity_rtol: 1.0e-4
 
 benchmark:
   threads: 4                # = physical cores here; same for PyTorch and ONNX Runtime (fair)

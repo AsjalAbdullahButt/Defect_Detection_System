@@ -1,9 +1,12 @@
 # Allow-list: exclude everything, then re-include only what the images need.
-# Data, models, .git, .env files, notebooks and tests never enter the build context.
+# Data, models, runs, reports, .git, .env files, notebooks and tests never enter the build context.
 *
 !src/
 !requirements/
+!configs/
 !pyproject.toml
 !README.md
 !LICENSE
 **/__pycache__
+**/*.pyc
+configs/*.env

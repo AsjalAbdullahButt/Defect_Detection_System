@@ -70,7 +70,8 @@ def test_export_writes_verified_artifact(exported: dict, calibrated: tuple) -> N
     model_dir = Path(exported["model_dir"])
     assert {p.name for p in model_dir.iterdir()} == {MODEL_FILE, META_FILE, SHA256SUMS}
     assert verify_sha256sums(model_dir) == []
-    assert exported["parity"]["max_abs_logit_diff"] <= config.export.parity_atol
+    assert exported["parity"]["passed"]
+    assert exported["parity"]["max_tolerance_used"] <= 1.0
     meta = ModelMeta.model_validate_json((model_dir / META_FILE).read_text(encoding="utf-8"))
     assert meta.onnx is not None
     assert meta.onnx.opset == config.export.opset

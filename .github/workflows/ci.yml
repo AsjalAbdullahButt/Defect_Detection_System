@@ -1,4 +1,5 @@
-# V0 scope: lint, type-check, tests. Security scans, leakage gate, image build + trivy land in V7/V8.
+# CI gates: lint/type/tests/leakage, security scans, and a scanned, verified serving image.
+# Every third-party action is pinned to a commit SHA (tags are mutable).
 name: ci
 
 on:
@@ -9,15 +10,82 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   quality:
+    name: lint, types, tests, leakage
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       - name: Install (hash-verified lockfiles)
         run: make setup
-      - name: Lint and type-check
+      - name: Lint and type-check (ruff, ruff format, mypy strict on core/serving)
         run: make lint
-      - name: Tests
-        run: make test
+      - name: Leakage tests (split overlap, preprocessing parity)
+        run: uv run pytest tests/leakage -q
+      - name: Full test suite with coverage
+        run: uv run pytest --cov=defect_detection --cov-report=xml --cov-report=term
+      - name: Coverage gate (core + serving >= 85%)
+        run: >
+          uv run coverage report --fail-under=85
+          --include="src/defect_detection/core/*,src/defect_detection/serving/*"
+
+  security:
+    name: bandit, pip-audit, gitleaks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # gitleaks scans the full history
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - name: Install dev tools only
+        run: |
+          uv venv --python 3.12
+          uv pip sync --require-hashes requirements/dev.txt
+      - name: bandit (fails on any unsuppressed finding)
+        run: uv run bandit -r src -q
+      - name: pip-audit (known CVEs in every lockfile)
+        run: |
+          for lock in serve train dev; do
+            uv run pip-audit -r requirements/$lock.txt --require-hashes --disable-pip --progress-spinner off
+          done
+      - name: gitleaks (secrets in history)
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  image:
+    name: build, verify and scan the serving image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: [quality, security]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build
+        run: docker build -f docker/serve.Dockerfile -t defect-detection-api:ci .
+      - name: Verify image properties
+        run: |
+          # No torch or training stack in the serving image.
+          docker run --rm --entrypoint python defect-detection-api:ci -c \
+            "import importlib.util as u, sys; bad=[m for m in ('torch','timm','torchvision','pandas','sklearn') if u.find_spec(m)]; print(bad); sys.exit(1 if bad else 0)"
+          # Runs as a non-root user.
+          test "$(docker run --rm --entrypoint id defect-detection-api:ci -u)" = "10001"
+          # Under a read-only root FS nothing can be written (writing must FAIL for CI to pass).
+          if docker run --rm --read-only --entrypoint sh defect-detection-api:ci \
+               -c 'touch /app/src/tamper' 2>/dev/null; then
+            echo "root filesystem is writable"; exit 1
+          fi
+          docker image inspect defect-detection-api:ci --format 'image size: {{.Size}} bytes'
+      - name: Trivy (fail on fixable HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: defect-detection-api:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"

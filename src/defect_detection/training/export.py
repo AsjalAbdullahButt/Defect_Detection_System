@@ -9,7 +9,7 @@ Output (immutable once written): ``models/<model_version>/``
 The graph outputs raw logits; temperature and threshold stay in the metadata, so recalibrating
 never requires re-exporting the network. Export fails (and nothing is kept) if
 ``onnx.checker`` rejects the graph or PyTorch and ONNX Runtime logits differ by more than
-``parity_atol`` on validation images.
+``parity_atol + parity_rtol * |logit|`` on validation images.
 """
 
 import json
@@ -57,18 +57,32 @@ def validation_batch(
 
 @torch.no_grad()
 def parity(
-    trained: TrainedModel, session: ort.InferenceSession, images: npt.NDArray[np.float32]
+    trained: TrainedModel,
+    session: ort.InferenceSession,
+    images: npt.NDArray[np.float32],
+    atol: float,
+    rtol: float,
 ) -> dict[str, Any]:
-    """Max |PyTorch logits - ONNX logits| at several batch sizes."""
+    """Compare PyTorch and ONNX logits at several batch sizes (``np.allclose`` semantics).
+
+    Passes when every |difference| <= atol + rtol * |PyTorch logit|. A purely absolute bound
+    is wrong for a confident model: logits around +-30 carry float32 rounding of ~1e-4.
+    """
     trained.model.eval()
-    worst = 0.0
+    worst_abs, worst_ratio = 0.0, 0.0
     for batch in PARITY_BATCH_SIZES:
         chunk = images[:batch]
         reference = trained.model(torch.from_numpy(chunk)).numpy()
         exported = session.run([OUTPUT_NAME], {INPUT_NAME: chunk})[0]
-        worst = max(worst, float(np.abs(reference - exported).max()))
+        diff = np.abs(reference - exported)
+        worst_abs = max(worst_abs, float(diff.max()))
+        worst_ratio = max(worst_ratio, float((diff / (atol + rtol * np.abs(reference))).max()))
     return {
-        "max_abs_logit_diff": worst,
+        "max_abs_logit_diff": worst_abs,
+        "max_tolerance_used": worst_ratio,  # <= 1.0 means within atol + rtol*|logit|
+        "passed": worst_ratio <= 1.0,
+        "atol": atol,
+        "rtol": rtol,
         "images": len(images),
         "batch_sizes": list(PARITY_BATCH_SIZES),
     }
@@ -100,8 +114,11 @@ def export_run(config: ProjectConfig, run_dir: Path) -> dict[str, Any]:
         )
         onnx.checker.check_model(onnx.load(str(out / MODEL_FILE)), full_check=True)
         images = validation_batch(config, trained, config.export.parity_images)
-        check = parity(trained, onnx_session(out / MODEL_FILE, threads=1), images)
-        if check["max_abs_logit_diff"] > config.export.parity_atol:
+        session = onnx_session(out / MODEL_FILE, threads=1)
+        check = parity(
+            trained, session, images, config.export.parity_atol, config.export.parity_rtol
+        )
+        if not check["passed"]:
             raise RuntimeError(f"PyTorch/ONNX parity failed: {check}")
     except Exception:
         shutil.rmtree(out)  # never leave a half-written model version behind

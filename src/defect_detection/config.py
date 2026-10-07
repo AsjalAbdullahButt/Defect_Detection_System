@@ -166,6 +166,7 @@ class ExportConfig(_Strict):
     opset: int = Field(ge=13, le=23)
     parity_images: int = Field(ge=20)
     parity_atol: float = Field(gt=0)
+    parity_rtol: float = Field(ge=0)
 
 
 class BenchmarkConfig(_Strict):

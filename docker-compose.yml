@@ -1,2 +1,49 @@
-# Hardened serving stack (read-only FS, tmpfs, cap_drop ALL, no-new-privileges, limits).
-# Implemented in V8.
+# Hardened serving stack.
+#   cp .env.example .env    # then set DD_API_KEYS and MODEL_VERSION
+#   docker compose up --build
+#   curl -H "X-API-Key: <key>" -F "file=@image.jpeg" http://127.0.0.1:8000/v1/predict
+#
+# The model is mounted read-only from ./models/<MODEL_VERSION>; rolling back = change
+# MODEL_VERSION in .env and `docker compose up -d` (see docs/RUNBOOK.md).
+
+name: defect-detection
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/serve.Dockerfile
+    image: defect-detection-api:local
+    env_file: .env
+    environment:
+      DD_MODEL_DIR: /models/${MODEL_VERSION:?set MODEL_VERSION in .env}
+      DD_METRICS_HOST: 0.0.0.0
+      DD_METRICS_PORT: "9100"
+    volumes:
+      - ./models/${MODEL_VERSION:?set MODEL_VERSION in .env}:/models/${MODEL_VERSION}:ro
+    ports:
+      - "127.0.0.1:8000:8000"   # API on localhost only; put a TLS reverse proxy in front
+    expose:
+      - "9100"                  # Prometheus metrics: compose network only, never published
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777,noexec,nosuid,nodev
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    user: "10001:10001"
+    pids_limit: 128
+    cpus: 2.0                   # matches DD_INFERENCE_THREADS x DD_MAX_CONCURRENT_INFERENCES
+    mem_limit: 1g
+    restart: unless-stopped
+    stop_grace_period: 25s      # > uvicorn --timeout-graceful-shutdown (20 s)
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).status == 200 else 1)"]
+      interval: 30s
+      timeout: 3s
+      start_period: 20s
+      retries: 3
+    networks: [internal]
+
+networks:
+  internal: {}
