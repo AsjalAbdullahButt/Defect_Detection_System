@@ -1,7 +1,8 @@
 """Pydantic schema for model_meta.json: everything serving needs besides the weights.
 
 V3 writes a *candidate* (calibration + operating point from validation); V5 completes it
-with ONNX details and checksums. Serving (V6) refuses to start if the file fails validation.
+with the ONNX graph description and the V4 test-metrics summary, and writes SHA256SUMS.
+Serving (V6) refuses to start if the file fails validation.
 """
 
 from typing import Literal
@@ -32,6 +33,19 @@ class ReviewBand(BaseModel):
     high: float = Field(ge=0, le=1)
 
 
+class OnnxSpec(BaseModel):
+    """How to run the exported graph. Added by the export step (V5)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    file: str = "model.onnx"
+    opset: int = Field(ge=13)
+    input_name: str
+    output_name: str
+    output: Literal["logits"] = "logits"  # P(defective) = softmax(logits / temperature)[:, 1]
+    dynamic_batch: bool = True
+
+
 class ModelMeta(BaseModel):
     """Contents of model_meta.json."""
 
@@ -51,6 +65,8 @@ class ModelMeta(BaseModel):
     git_commit: str
     config_hash: str
     created_at: str
+    onnx: OnnxSpec | None = None  # None in the V3 candidate; required by serving
+    test_metrics: dict[str, dict[str, float]] | None = None  # one-shot V4 results, per test set
 
     @model_validator(mode="after")
     def _consistent(self) -> "ModelMeta":

@@ -159,6 +159,24 @@ class AnomalyConfig(_Strict):
     projection_dim: int = Field(ge=8)
 
 
+class ExportConfig(_Strict):
+    """ONNX export and train/serve parity check."""
+
+    models_dir: Path
+    opset: int = Field(ge=13, le=23)
+    parity_images: int = Field(ge=20)
+    parity_atol: float = Field(gt=0)
+
+
+class BenchmarkConfig(_Strict):
+    """CPU latency/throughput benchmark."""
+
+    threads: int = Field(ge=1)
+    warmup: int = Field(ge=1)
+    runs: int = Field(ge=10)
+    batch_sizes: tuple[int, ...]
+
+
 class ProjectConfig(_Strict):
     """Root of configs/train.yaml."""
 
@@ -173,6 +191,8 @@ class ProjectConfig(_Strict):
     operating_point: OperatingPointConfig
     evaluation: EvaluationConfig
     anomaly: AnomalyConfig
+    export: ExportConfig
+    benchmark: BenchmarkConfig
 
 
 def load_config(path: Path) -> ProjectConfig:

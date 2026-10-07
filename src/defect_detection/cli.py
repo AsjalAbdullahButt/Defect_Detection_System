@@ -48,11 +48,6 @@ def inspect(
         typer.echo(f"\nSummary written to {json_out}")
 
 
-def _not_yet(version: str) -> None:
-    typer.echo(f"Not implemented yet: arrives in {version}.", err=True)
-    raise typer.Exit(code=2)
-
-
 ConfigOption = Annotated[
     Path, typer.Option("--config", exists=True, dir_okay=False, help="Project YAML config.")
 ]
@@ -281,12 +276,38 @@ def anomaly_baseline(config_path: ConfigOption = DEFAULT_CONFIG) -> None:
 
 
 @app.command()
-def export() -> None:
-    """Export to ONNX with metadata and checksums (V5)."""
-    _not_yet("V5")
+def export(
+    config_path: ConfigOption = DEFAULT_CONFIG,
+    run: Annotated[
+        Path | None, typer.Option(file_okay=False, help="Run directory (default: runs/LATEST).")
+    ] = None,
+) -> None:
+    """Export to models/<version>/ (ONNX + meta + SHA256SUMS) after checker and parity checks."""
+    from defect_detection.training.export import export_run
+
+    config = load_config(config_path)
+    summary = export_run(config, _resolve_run(config.train.output_dir, run))
+    typer.echo(json.dumps(summary, indent=2))
 
 
 @app.command()
-def benchmark() -> None:
-    """CPU latency/throughput benchmark (V5)."""
-    _not_yet("V5")
+def benchmark(
+    config_path: ConfigOption = DEFAULT_CONFIG,
+    run: Annotated[
+        Path | None, typer.Option(file_okay=False, help="Run directory (default: runs/LATEST).")
+    ] = None,
+) -> None:
+    """CPU latency/throughput: PyTorch vs ONNX Runtime fp32 vs INT8 -> reports/benchmark.md."""
+    from defect_detection.training.benchmark import render_markdown, run_benchmark
+
+    config = load_config(config_path)
+    run_dir = _resolve_run(config.train.output_dir, run)
+    model_dir = config.export.models_dir / run_dir.name
+    if not model_dir.is_dir():
+        typer.echo(f"{model_dir} not found; run `make export` first.", err=True)
+        raise typer.Exit(code=1)
+    results = run_benchmark(config, run_dir, model_dir)
+    reports = Path("reports")
+    _write_json(reports / "benchmark.json", results)
+    (reports / "benchmark.md").write_text(render_markdown(results), encoding="utf-8")
+    typer.echo(render_markdown(results))

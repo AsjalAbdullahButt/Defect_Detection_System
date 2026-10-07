@@ -253,3 +253,23 @@ Format: **Decision · Alternatives · Why · Trade-off**. One entry per non-triv
 - **Alternatives:** anomalib (pulls in Lightning and a large dependency tree); skip the baseline.
 - **Why:** the method is short: pretrained mid-level patch features, a memory bank of normal patches selected with greedy k-center, and an image score equal to its worst patch. It is fit on NORMAL train images only and its threshold is chosen on val with the classifier's recall policy, so the comparison is fair. Simplifications: random 64 patches per image before the coreset, a 5,000-patch bank, and no score reweighting.
 - **Trade-off:** probably a few points below a tuned anomalib PatchCore. It is a baseline to argue from, not a competitor to optimise.
+
+## V5 — ONNX export, verification & benchmark
+
+### D-041 TorchScript ONNX exporter (opset 17, dynamic batch); the graph outputs logits
+
+- **Alternatives:** the dynamo-based exporter (torch's default since 2.9); baking softmax and temperature into the graph.
+- **Why:** the dynamo exporter needs the extra `onnxscript` package, and the TorchScript exporter is mature for plain CNNs; it exported this model first time. Outputting logits keeps temperature, threshold and review band in `model_meta.json`, so recalibrating never means re-exporting.
+- **Trade-off:** torch flags the TorchScript exporter as deprecated ("will be removed"). A future torch upgrade means switching to `dynamo=True` and adding `onnxscript`; the parity test will catch any behaviour change.
+
+### D-042 Model registry: immutable `models/<version>/` with SHA256SUMS; export fails closed
+
+- **Alternatives:** overwrite `models/latest/`; an MLflow registry.
+- **Why:** the version is the run name (`<timestamp>_<config-hash>`), so every artifact traces back to its config and commit. Export refuses an existing version and deletes everything it wrote if `onnx.checker` or the parity check fails. Parity: max |logit difference| ≤ 1e-4 on 32 VAL images at batch sizes 1, 7 and 32 (7 checks the dynamic axis with a size the tracer never saw). `SHA256SUMS` uses the `sha256sum -c` format and rejects path-traversal names, so serving can verify integrity before loading anything.
+- **Trade-off:** rollback means pointing serving at the previous folder (RUNBOOK, V8) rather than a registry UI.
+
+### D-043 Benchmark method; INT8 dynamic quantisation is an experiment, not shipped by default
+
+- **Alternatives:** time only ONNX; ship INT8 if it is faster.
+- **Why:** same real val images, same thread count (4, the physical cores here) for PyTorch and ONNX Runtime, warm-up discarded, p50/p95/p99 over 100 calls, throughput from the median. INT8 is written next to the run, never into `models/`. Its effect on decisions at the operating threshold is measured on the full val split, because a faster model that flips a defect decision isn't an improvement.
+- **Trade-off:** dynamic quantisation mainly helps MatMul-heavy models. On a depthwise-conv CNN it may give little speed-up; the table reports whatever it measures.

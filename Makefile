@@ -7,7 +7,7 @@ RUN := uv run
 DATA_DIR ?= data/raw
 
 .DEFAULT_GOAL := help
-.PHONY: help lock setup setup-serve lint format typecheck test inspect manifest split audit data eda train calibrate evaluate anomaly error-analysis
+.PHONY: help lock setup setup-serve lint format typecheck test inspect manifest split audit data eda train calibrate evaluate anomaly error-analysis export benchmark
 
 help: ## List available targets
 	@uv run --no-project python -c "import re; [print(f'{m[0]:<14} {m[1]}') for m in re.findall(r'^([a-z-]+):.*?## (.*)$$', open('Makefile').read(), re.M)]"
@@ -73,3 +73,9 @@ anomaly: ## PatchCore baseline (normal train only), threshold on val, ONE evalua
 
 error-analysis: ## Execute notebooks/02_error_analysis.ipynb (reads saved test predictions only)
 	$(RUN) jupyter nbconvert --to notebook --execute --inplace notebooks/02_error_analysis.ipynb
+
+export: ## Export runs/LATEST to models/<version>/ (ONNX + meta + SHA256SUMS), checker + parity
+	$(RUN) defect-detection export
+
+benchmark: ## CPU latency/throughput PyTorch vs ONNX (fp32, int8) -> reports/benchmark.md
+	$(RUN) defect-detection benchmark

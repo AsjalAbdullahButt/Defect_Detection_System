@@ -102,3 +102,15 @@ anomaly:
   patches_per_image: 64     # random patch subsample per training image (keeps memory small)
   coreset_size: 5000        # greedy k-center memory bank
   projection_dim: 128       # random projection used only for coreset selection
+
+export:
+  models_dir: models        # gitignored; models/<model_version>/{model.onnx, model_meta.json, SHA256SUMS}
+  opset: 17
+  parity_images: 32         # VAL images compared PyTorch vs ONNX Runtime (never test)
+  parity_atol: 1.0e-4       # max |logit difference| allowed
+
+benchmark:
+  threads: 4                # = physical cores here; same for PyTorch and ONNX Runtime (fair)
+  warmup: 10
+  runs: 100
+  batch_sizes: [1, 8, 32]
