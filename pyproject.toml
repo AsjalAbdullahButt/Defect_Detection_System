@@ -23,6 +23,7 @@ dependencies = { file = ["requirements/base.in"] }
 [tool.setuptools.dynamic.optional-dependencies]
 serve = { file = ["requirements/serve.in"] }
 train = { file = ["requirements/train.in"] }
+ui = { file = ["requirements/ui.in"] }
 dev = { file = ["requirements/dev.in"] }
 anomaly = { file = ["requirements/anomaly.in"] }
 
@@ -60,7 +61,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["defect_detection", "tests"]
+known-first-party = ["defect_detection", "tests", "components", "services"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -78,6 +79,7 @@ convention = "google"
 "src/defect_detection/data/augment.py" = ["TID251"]
 "tests/**" = ["S101", "D", "ANN", "TID251"]
 "notebooks/**" = ["D", "ANN"]
+"ui/pages/*" = ["N999"]  # Streamlit page files are named 1_Inspect.py etc.
 
 # ---------------------------------------------------------------- mypy
 [tool.mypy]
@@ -113,7 +115,7 @@ extra_checks = true
 # ---------------------------------------------------------------- pytest / coverage
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = [".", "ui"]
 addopts = ["--import-mode=importlib", "-ra", "--strict-markers"]
 markers = [
     "slow: long-running tests (training, benchmarks)",

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Defect Inspection">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3B82F6"/>
+      <stop offset="1" stop-color="#8B5CF6"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="32" r="27" fill="none" stroke="url(#g)" stroke-width="6"/>
+  <circle cx="32" cy="32" r="10" fill="none" stroke="url(#g)" stroke-width="5"/>
+  <circle cx="45" cy="20" r="4" fill="#F43F5E"/>
+</svg>

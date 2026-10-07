@@ -52,6 +52,15 @@ DD_MODEL_DIR=models/<version> DD_ENVIRONMENT=development make serve   # http://1
 make help         # every target
 ```
 
+### Streamlit UI
+
+With the API running, set `DD_UI_API_KEY` in your local `.env` to one of the API
+keys, then run `bash scripts/run_ui.sh`. Open `http://127.0.0.1:8501` to inspect
+one image, run a batch, view model metrics, or explore saved Grad-CAM panels.
+`make setup` includes the UI dependencies; for a UI-only environment use
+`bash scripts/setup.sh ui`. Optional local samples can be copied with
+`bash scripts/run_ui.sh --samples-from-data` and remain gitignored.
+
 ## Results
 
 Model `20261007T173514Z_c9fca37c51cb`; operating threshold **0.9036** (chosen on validation:
@@ -197,7 +206,7 @@ defect the model misses at the threshold, which the review band sends to a perso
 `{"error", "detail", "request_id"}`: 400 invalid image, 401 bad key, 413 too large,
 415 not an accepted image type, 422 missing field, 429 rate limited (with `Retry-After`),
 503 overloaded / not ready, 504 inference timeout. Real request/response examples:
-`examples/README.md`.
+`examples/example_predictions.md`.
 
 ## Security summary
 

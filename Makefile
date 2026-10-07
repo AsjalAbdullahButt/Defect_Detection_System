@@ -12,14 +12,15 @@ DATA_DIR ?= data/raw
 help: ## List available targets
 	@uv run --no-project python -c "import re; [print(f'{m[0]:<14} {m[1]}') for m in re.findall(r'^([a-z-]+):.*?## (.*)$$', open('Makefile').read(), re.M)]"
 
-lock: ## Re-resolve hash-pinned lockfiles from requirements/*.in (serve -> train -> dev)
+lock: ## Re-resolve hash-pinned lockfiles from requirements/*.in (serve -> train -> ui -> dev)
 	$(COMPILE) requirements/base.in requirements/serve.in -o requirements/serve.txt
 	$(COMPILE) requirements/base.in requirements/train.in -c requirements/serve.txt -o requirements/train.txt
-	$(COMPILE) requirements/dev.in -c requirements/train.txt -c requirements/serve.txt -o requirements/dev.txt
+	$(COMPILE) requirements/ui.in -c requirements/serve.txt -o requirements/ui.txt
+	$(COMPILE) requirements/dev.in -c requirements/train.txt -c requirements/serve.txt -c requirements/ui.txt -o requirements/dev.txt
 
-setup: ## Create .venv (Python 3.12) with train+serve+dev deps from lockfiles, hashes enforced
+setup: ## Create .venv (Python 3.12) with train+serve+ui+dev deps, hashes enforced
 	uv venv --python $(PYTHON_VERSION) --allow-existing .venv
-	uv pip sync --require-hashes requirements/train.txt requirements/serve.txt requirements/dev.txt
+	uv pip sync --require-hashes requirements/train.txt requirements/serve.txt requirements/ui.txt requirements/dev.txt
 	uv pip install --no-deps -e .
 
 setup-serve: ## Create .venv with serving deps only (mirrors the production image)
@@ -31,6 +32,7 @@ lint: ## ruff lint + format check + mypy
 	$(RUN) ruff check .
 	$(RUN) ruff format --check .
 	$(RUN) mypy
+	$(RUN) mypy --config-file ui/mypy.ini
 
 format: ## Auto-fix lint issues and format code
 	$(RUN) ruff check --fix .

@@ -49,10 +49,10 @@ jobs:
           uv venv --python 3.12
           uv pip sync --require-hashes requirements/dev.txt
       - name: bandit (fails on any unsuppressed finding)
-        run: uv run bandit -r src -q
+        run: uv run bandit -r src ui -q
       - name: pip-audit (known CVEs in every lockfile)
         run: |
-          for lock in serve train dev; do
+          for lock in serve train ui dev; do
             uv run pip-audit -r requirements/$lock.txt --require-hashes --disable-pip --progress-spinner off
           done
       - name: gitleaks (secrets in history)

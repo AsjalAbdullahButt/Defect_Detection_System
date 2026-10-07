@@ -124,3 +124,40 @@ def error_table(predictions: pd.DataFrame) -> pd.DataFrame:
         "brightness",
     ]
     return errors[columns].sort_values(["split", "error_type", "p_defective"])
+
+
+def select_explain_cases(predictions: pd.DataFrame, per_kind: int = 2) -> pd.DataFrame:
+    """The cases shown on the UI's Explain page.
+
+    False negatives: the official test set's misses (lowest P(defective) first).
+    False positives: the most confident false alarms on the external test set.
+    """
+    errors = predictions[~predictions["correct"]]
+    fn = errors[(errors["split"] == "test") & (errors["label"] == 1)].nsmallest(
+        per_kind, "p_defective"
+    )
+    fp = errors[(errors["split"] == "external_test") & (errors["label"] == 0)].nlargest(
+        per_kind, "p_defective"
+    )
+    return pd.concat([fn.assign(kind="FN"), fp.assign(kind="FP")], ignore_index=True)
+
+
+def save_explain_panel(
+    row: pd.Series, raw_dir: Path, model: nn.Module, spec: PreprocessSpec, out_path: Path
+) -> None:
+    """Side-by-side PNG: the model's input view and the Grad-CAM overlay for one case."""
+    with Image.open(raw_dir / row["rel_path"]) as img:
+        img.load()
+        shown = prepare_image(img, spec).convert("L")
+        cam = grad_cam(model, img, spec)
+    fig, (left, right) = plt.subplots(1, 2, figsize=(7, 3.6))
+    left.imshow(shown, cmap="gray")
+    left.set_title("input (224x224)", fontsize=9)
+    right.imshow(shown, cmap="gray")
+    right.imshow(cam, cmap="jet", alpha=0.4)
+    right.set_title("Grad-CAM: evidence for 'defective'", fontsize=9)
+    for ax in (left, right):
+        ax.axis("off")
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=110)
+    plt.close(fig)

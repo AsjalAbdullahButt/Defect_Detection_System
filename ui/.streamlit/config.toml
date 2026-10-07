@@ -1,0 +1,28 @@
+# Streamlit settings for the demo UI. Read from the working directory: run from ui/
+# (scripts/run_ui.sh does this).
+
+[browser]
+gatherUsageStats = false          # no telemetry
+
+[server]
+headless = true
+maxUploadSize = 5                 # MB per file; matches the API's DD_MAX_UPLOAD_BYTES (5 MiB)
+enableXsrfProtection = true
+enableCORS = true
+runOnSave = false
+
+[client]
+toolbarMode = "minimal"           # no developer menu
+showErrorDetails = "none"         # never show tracebacks to users
+showSidebarNavigation = true
+
+[runner]
+magicEnabled = false              # explicit st.* calls only
+
+[theme]
+base = "dark"
+primaryColor = "#3B82F6"
+backgroundColor = "#0A0D14"
+secondaryBackgroundColor = "#111623"
+textColor = "#E6EAF2"
+font = "sans serif"

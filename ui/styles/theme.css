@@ -1,0 +1,188 @@
+/* Theme: Streamlit overrides + Inspira-UI effects ported to plain CSS (no JS, no CDN).
+   Every value comes from tokens.css. Effects are disabled under prefers-reduced-motion. */
+
+/* ---------------------------------------------------------------- base + chrome */
+html, body, [data-testid="stAppViewContainer"] {
+  font-family: var(--dd-font-ui);
+  color: var(--dd-text);
+}
+[data-testid="stAppViewContainer"] { background: var(--dd-bg); }
+[data-testid="stMainBlockContainer"], .block-container {
+  max-width: var(--dd-max-width);
+  padding-top: var(--dd-space-5);
+}
+#MainMenu, footer, [data-testid="stDeployButton"], [data-testid="stStatusWidget"] {
+  display: none !important;
+}
+[data-testid="stSidebar"] { background: var(--dd-surface); border-right: 1px solid var(--dd-border); }
+:focus-visible { outline: none; box-shadow: var(--dd-focus) !important; }
+.dd-mono { font-family: var(--dd-font-mono); font-variant-numeric: tabular-nums; }
+.dd-muted { color: var(--dd-muted); }
+.dd-sr {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- aurora-background (Inspira: aurora-background) */
+.dd-hero {
+  position: relative; overflow: hidden;
+  border: 1px solid var(--dd-border); border-radius: var(--dd-radius-card);
+  background: var(--dd-surface);
+  padding: var(--dd-space-6) var(--dd-space-5);
+  margin-bottom: var(--dd-space-5);
+}
+.dd-hero::before {
+  content: ""; position: absolute; inset: -40%;
+  background-image:
+    repeating-linear-gradient(100deg, var(--dd-bg) 0%, var(--dd-bg) 7%, transparent 10%, transparent 12%, var(--dd-bg) 16%),
+    repeating-linear-gradient(100deg, var(--dd-accent-1) 10%, var(--dd-accent-2) 15%, #60A5FA 20%, #C4B5FD 25%, var(--dd-accent-1) 30%);
+  background-size: 300% 200%;
+  background-position: 50% 50%, 50% 50%;
+  filter: blur(10px);
+  opacity: 0.35;
+  mask-image: radial-gradient(ellipse at 100% 0%, black 10%, transparent 70%);
+  animation: dd-aurora 60s linear infinite;
+  pointer-events: none;
+}
+@keyframes dd-aurora {
+  from { background-position: 50% 50%, 50% 50%; }
+  to { background-position: 350% 50%, 350% 50%; }
+}
+.dd-hero > * { position: relative; }
+.dd-hero h1 { margin: 0 0 var(--dd-space-2); font-size: 2rem; letter-spacing: -0.02em; color: var(--dd-text); }
+.dd-hero p { margin: 0; color: var(--dd-muted); }
+.dd-hero .dd-pills { margin-top: var(--dd-space-4); display: flex; gap: var(--dd-space-2); flex-wrap: wrap; }
+
+/* ---------------------------------------------------------------- pills / badges */
+.dd-pill {
+  display: inline-flex; align-items: center; gap: var(--dd-space-1);
+  padding: 2px var(--dd-space-3); border-radius: var(--dd-radius-pill);
+  border: 1px solid var(--dd-border); background: var(--dd-elevated);
+  font-size: 0.8rem; font-weight: 600; color: var(--dd-text);
+}
+.dd-pill--normal { background: var(--dd-normal); color: var(--dd-on-semantic); border-color: transparent; }
+.dd-pill--defective { background: var(--dd-defective); color: var(--dd-on-semantic); border-color: transparent; }
+.dd-pill--review { background: var(--dd-review); color: var(--dd-on-semantic); border-color: transparent; }
+.dd-pill--mono { font-family: var(--dd-font-mono); font-weight: 500; }
+
+/* ---------------------------------------------------------------- border-beam (Inspira: border-beam) */
+@property --dd-angle { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+.dd-card {
+  position: relative; border-radius: var(--dd-radius-card);
+  background: var(--dd-surface); border: 1px solid var(--dd-border);
+  padding: var(--dd-space-5);
+}
+.dd-verdict { --dd-beam: var(--dd-accent-1); }
+.dd-verdict--normal { --dd-beam: var(--dd-normal); }
+.dd-verdict--defective { --dd-beam: var(--dd-defective); }
+.dd-verdict--review { --dd-beam: var(--dd-review); }
+.dd-verdict::after {
+  content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 2px;
+  background: conic-gradient(from var(--dd-angle), transparent 0deg, var(--dd-accent-1) 40deg,
+                             var(--dd-beam) 80deg, transparent 120deg, transparent 360deg);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  animation: dd-beam 4s linear infinite;
+  pointer-events: none;
+}
+@keyframes dd-beam { to { --dd-angle: 360deg; } }
+.dd-verdict__label { display: flex; align-items: center; gap: var(--dd-space-3); font-size: 1.6rem; font-weight: 700; }
+.dd-verdict__icon {
+  display: inline-grid; place-items: center; width: 40px; height: 40px;
+  border-radius: var(--dd-radius-pill); background: var(--dd-beam); color: var(--dd-on-semantic);
+}
+.dd-verdict__meta { margin-top: var(--dd-space-3); color: var(--dd-muted); font-size: 0.85rem; }
+
+/* ---------------------------------------------------------------- number-ticker (Inspira: number-ticker) */
+@property --dd-num { syntax: "<integer>"; inherits: false; initial-value: 0; }
+.dd-ticker {
+  --dd-num: var(--dd-target);
+  counter-reset: dd-num var(--dd-num);
+  animation: dd-count 1.2s cubic-bezier(.2, .8, .2, 1);
+  font-family: var(--dd-font-mono); font-variant-numeric: tabular-nums;
+}
+.dd-ticker::before { content: counter(dd-num); }
+@keyframes dd-count { from { --dd-num: 0; } }
+
+/* ---------------------------------------------------------------- metric tiles (Inspira: card-spotlight) */
+.dd-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--dd-space-3); margin: var(--dd-space-4) 0; }
+.dd-tile {
+  position: relative; overflow: hidden; border-radius: var(--dd-radius-card);
+  border: 1px solid var(--dd-border); background: var(--dd-surface); padding: var(--dd-space-4);
+}
+.dd-tile::before {
+  content: ""; position: absolute; inset: 0; opacity: 0; transition: opacity .3s ease;
+  background: radial-gradient(420px circle at 0% 0%, rgba(139, 92, 246, .18), transparent 60%);
+  pointer-events: none;
+}
+.dd-tile:hover::before { opacity: 1; }
+.dd-tile__label { color: var(--dd-muted); font-size: 0.78rem; text-transform: uppercase; letter-spacing: .06em; }
+.dd-tile__value { font-size: clamp(1.15rem, 1.9vw, 1.7rem); font-weight: 700; margin-top: var(--dd-space-1); overflow-wrap: normal; word-break: keep-all; }
+.dd-tile__sub { color: var(--dd-muted); font-size: 0.8rem; margin-top: var(--dd-space-1); font-family: var(--dd-font-mono); }
+
+/* ---------------------------------------------------------------- gauge */
+.dd-gauge { margin: var(--dd-space-4) 0; }
+.dd-gauge__track {
+  position: relative; height: 14px; border-radius: var(--dd-radius-pill);
+  background: linear-gradient(90deg, var(--dd-normal), var(--dd-elevated) 50%, var(--dd-defective));
+  border: 1px solid var(--dd-border);
+}
+.dd-gauge__band {
+  position: absolute; top: -3px; bottom: -3px;
+  background: repeating-linear-gradient(45deg, rgba(245, 158, 11, .35) 0 6px, rgba(245, 158, 11, .15) 6px 12px);
+  border: 1px solid var(--dd-review); border-radius: 4px;
+}
+.dd-gauge__threshold { position: absolute; top: -6px; bottom: -6px; width: 2px; background: var(--dd-text); }
+.dd-gauge__marker {
+  position: absolute; top: 50%; width: 18px; height: 18px; transform: translate(-50%, -50%);
+  border-radius: 50%; background: var(--dd-surface); border: 3px solid var(--dd-text);
+  box-shadow: 0 0 0 3px var(--dd-bg);
+}
+.dd-gauge__legend { display: flex; justify-content: space-between; color: var(--dd-muted); font-size: 0.78rem; margin-top: var(--dd-space-2); }
+
+/* ---------------------------------------------------------------- review banner */
+.dd-banner {
+  display: flex; gap: var(--dd-space-3); align-items: flex-start;
+  border-radius: var(--dd-radius-card); padding: var(--dd-space-3) var(--dd-space-4);
+  border: 1px solid var(--dd-review); background: rgba(245, 158, 11, .10); color: var(--dd-text);
+  margin: var(--dd-space-3) 0;
+}
+.dd-banner--error { border-color: var(--dd-defective); background: rgba(244, 63, 94, .10); }
+
+/* ---------------------------------------------------------------- shimmer-button (Inspira: shimmer-button) */
+.stButton > button[kind="primary"], .stDownloadButton > button {
+  position: relative; overflow: hidden; border: 0; border-radius: var(--dd-radius-pill);
+  background: var(--dd-accent); color: #fff; font-weight: 600;
+}
+.stButton > button[kind="primary"]::after {
+  content: ""; position: absolute; inset: 0;
+  background: conic-gradient(from 225deg, transparent 0 340deg, rgba(255, 255, 255, .55) 360deg);
+  transform: translateX(-100%); pointer-events: none;
+}
+.stButton > button[kind="primary"]:hover::after { animation: dd-shimmer 1.2s ease; }
+@keyframes dd-shimmer { to { transform: translateX(100%); } }
+
+/* sample chips (st.pills) wrap instead of overflowing */
+[data-testid="stButtonGroup"], [data-testid="stButtonGroup"] > div { flex-wrap: wrap !important; }
+
+/* ---------------------------------------------------------------- file-upload grid (Inspira: file-upload) */
+[data-testid="stFileUploader"] section, [data-testid="stFileUploaderDropzone"] {
+  border-radius: var(--dd-radius-card) !important;
+  border: 1px dashed var(--dd-border) !important;
+  background-color: var(--dd-surface) !important;
+  background-image: radial-gradient(var(--dd-border) 1px, transparent 1px) !important;
+  background-size: 16px 16px !important;
+  transition: border-color .2s ease;
+}
+[data-testid="stFileUploader"] section:hover, [data-testid="stFileUploaderDropzone"]:hover {
+  border-color: var(--dd-accent-1) !important;
+}
+
+/* ---------------------------------------------------------------- blur-reveal (Inspira: blur-reveal) */
+.dd-reveal { animation: dd-reveal .4s ease both; }
+@keyframes dd-reveal { from { opacity: 0; filter: blur(8px); } to { opacity: 1; filter: blur(0); } }
+
+/* ---------------------------------------------------------------- accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

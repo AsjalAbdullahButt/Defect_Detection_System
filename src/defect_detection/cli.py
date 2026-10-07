@@ -251,6 +251,44 @@ def evaluate(
         typer.echo(f"  confusion tn={cm['tn']} fp={cm['fp']} fn={cm['fn']} tp={cm['tp']}")
 
 
+@app.command()
+def explain(
+    config_path: ConfigOption = DEFAULT_CONFIG,
+    run: Annotated[
+        Path | None, typer.Option(file_okay=False, help="Run directory (default: runs/LATEST).")
+    ] = None,
+) -> None:
+    """Grad-CAM panels (2 FN + 2 FP) from saved test predictions -> reports/error_analysis/."""
+    from defect_detection.training import error_analysis as ea
+    from defect_detection.training.trainer import load_trained_model, resolve_device
+
+    config = load_config(config_path)
+    run_dir = _resolve_run(config.train.output_dir, run)
+    predictions = pd.read_csv(run_dir / "test_predictions.csv")  # written once by `evaluate`
+    trained = load_trained_model(run_dir, resolve_device("cpu"))
+    out = Path("reports") / "error_analysis"
+    out.mkdir(parents=True, exist_ok=True)
+    index = []
+    cases = ea.select_explain_cases(predictions)
+    for number, (_, row) in enumerate(cases.iterrows(), start=1):
+        name = f"{number:02d}_{row['kind']}_{Path(row['rel_path']).stem}.png"
+        ea.save_explain_panel(row, config.data.raw_dir, trained.model, trained.spec, out / name)
+        index.append(
+            {
+                "file": name,
+                "kind": row["kind"],
+                "split": row["split"],
+                "image": Path(row["rel_path"]).name,
+                "true_class": "defective" if row["label"] == 1 else "normal",
+                "defect_probability": float(row["p_defective"]),
+                "needs_review": bool(row["needs_review"]),
+                "nearest_train_similarity": float(row["nearest_train_similarity"]),
+                "brightness": float(row["brightness"]),
+            }
+        )
+    _write_json(out / "index.json", {"run": run_dir.name, "cases": index})
+
+
 @app.command("anomaly-baseline")
 def anomaly_baseline(config_path: ConfigOption = DEFAULT_CONFIG) -> None:
     """PatchCore baseline: fit on normal train, threshold on val, ONE evaluation on test sets."""

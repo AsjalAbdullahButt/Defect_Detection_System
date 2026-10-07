@@ -1,0 +1,6 @@
+# Streamlit demo UI: a thin HTTP client of the API. Imports nothing from src/ (no torch, no
+# onnxruntime). Compiled with -c serve.txt so shared packages (pydantic, httpx deps) agree.
+streamlit>=1.40
+httpx>=0.28
+pydantic>=2.9
+pandas>=2.2

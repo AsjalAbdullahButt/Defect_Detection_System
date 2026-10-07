@@ -16,9 +16,12 @@ htmlcov/
 
 # Secrets: never commit real env files (examples are allowed)
 .env
+.env.*
 *.env
+*.env.*
 !.env.example
 !configs/serve.env.example
+**/.streamlit/secrets.toml
 
 # Data: only the README and folder placeholders are tracked
 data/raw/*
@@ -29,6 +32,7 @@ data/processed/*
 # Model artifacts and checkpoints
 models/*
 !models/.gitkeep
+!models/README.md
 *.pt
 *.pth
 *.ckpt
@@ -56,6 +60,14 @@ service-account*.json
 secrets/
 .secrets*
 *.secret
+.aws/
+.azure/
+.ssh/
+*.sqlite
+*.sqlite3
+*.db
+*.sql
+*.dump
 
 # Generated reports (contain local absolute paths / dataset details); placeholders only
 reports/*.json
@@ -77,3 +89,7 @@ logs/
 CLAUDE.local.md
 .env.local
 *.local.yaml
+
+# UI demo samples are copied from data/raw locally (dataset licence: no redistribution)
+ui/assets/samples/*
+!ui/assets/samples/.gitkeep

@@ -1,4 +1,4 @@
-# API examples (real responses)
+# Example predictions (real API responses)
 
 Every file in `responses/` was produced by `run_examples.sh` against the production-mode server
 (`DD_ENVIRONMENT=production`, API key required, docs off), serving model
