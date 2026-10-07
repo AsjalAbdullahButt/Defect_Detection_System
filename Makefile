@@ -7,7 +7,7 @@ RUN := uv run
 DATA_DIR ?= data/raw
 
 .DEFAULT_GOAL := help
-.PHONY: help lock setup setup-serve lint format typecheck test inspect manifest split audit data eda
+.PHONY: help lock setup setup-serve lint format typecheck test inspect manifest split audit data eda train
 
 help: ## List available targets
 	@uv run --no-project python -c "import re; [print(f'{m[0]:<14} {m[1]}') for m in re.findall(r'^([a-z-]+):.*?## (.*)$$', open('Makefile').read(), re.M)]"
@@ -58,3 +58,6 @@ data: manifest split audit ## Full data pipeline: manifest -> split -> audit
 
 eda: ## Execute notebooks/01_eda.ipynb in place (train+val only)
 	$(RUN) jupyter nbconvert --to notebook --execute --inplace notebooks/01_eda.ipynb
+
+train: ## Two-stage fine-tuning -> runs/<stamp>_<config-hash>/best.pt (+ curves, summary)
+	$(RUN) defect-detection train

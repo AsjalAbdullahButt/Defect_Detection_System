@@ -4,7 +4,7 @@ Classifies product images as **normal** or **defective** (the positive class) us
 transfer-learned CNN. Evaluation follows a leakage-safe protocol, and the model is served by a
 hardened ONNX Runtime API that doesn't depend on torch.
 
-> Status: **V1 — manifest, deduplication, split & leakage audit** (code complete; awaiting the real dataset). Later sections are added as each version lands.
+> Status: **V2 — shared preprocessing & training pipeline** (code complete, tested on synthetic data; awaiting the real dataset). Later sections are added as each version lands.
 
 ## Quickstart (development)
 
@@ -17,6 +17,7 @@ make test       # pytest with coverage
 make inspect    # inventory of data/raw (see data/README.md)
 make data       # manifest -> dedupe + group-aware split -> leakage audit
 make eda        # run notebooks/01_eda.ipynb (train + val only)
+make train      # two-stage fine-tuning -> runs/<stamp>_<config-hash>/best.pt
 make help       # all targets
 ```
 

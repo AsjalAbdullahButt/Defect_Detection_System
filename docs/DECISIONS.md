@@ -101,3 +101,45 @@ Format: **Decision · Alternatives · Why · Trade-off**. One entry per non-triv
 - **Alternatives:** parse YAML in each command; put EDA code in the notebook.
 - **Why:** a single pydantic schema rejects unknown keys and invalid ratios at load time. Every report records the git commit (with `-dirty` if there are uncommitted changes) and the config hash. EDA logic lives in a tested module that can't load test rows, so the notebook stays thin. These three files are not in §2.
 - **Trade-off:** more modules, but each has one job.
+
+## V2 — Shared preprocessing & training
+
+### D-017 Preprocessing: EXIF-upright → RGB → direct bilinear resize to 224 → ImageNet normalisation
+- **Alternatives:** resize the shorter side then centre-crop (timm's default eval transform); normalise with dataset statistics.
+- **Why:** a centre crop can cut off a defect on the rim. Casting images are square, so a direct resize doesn't distort them. ImageNet mean/std match the pretrained weights, and they aren't fitted to our data, so no statistics leak from any split (§3.5). Applying EXIF orientation makes phone uploads in serving match what training saw.
+- **Trade-off:** non-square uploads get stretched. Serving will enforce aspect-ratio limits (V6).
+
+### D-018 Augmentation inserted between the core steps instead of reimplementing preprocessing
+- **Alternatives:** a separate torchvision pipeline for training (`Resize` + `ToTensor` + `Normalize`).
+- **Why:** training calls the same `prepare_image` / `to_float_array` / `normalize` functions as serving, with augmentations in between. A test proves that with augmentation switched off the output equals `core.preprocess`, and the parity test proves the dataset and the serving decode path are bit-identical.
+- **Trade-off:** the noise step is custom code (about 3 lines) rather than a library transform.
+
+### D-019 Mild augmentation only; no random crop or cutout
+- **Alternatives:** RandAugment/TrivialAugment, RandomResizedCrop, cutout/random erasing.
+- **Why:** defects are often a few pixels (pinholes, burrs). A crop or erase can delete the only defect and turn a "defective" image into a normal-looking one, which is label noise. ±15° rotation, flips, brightness/contrast ±20%, light blur/noise and ±5% shift/scale match plausible camera variation on a fixed rig.
+- **Trade-off:** less regularisation than aggressive policies. If V2 shows overfitting, augmentation is the first thing to tune.
+
+### D-020 EfficientNet-B0 (timm, ImageNet `ra_in1k`) with a 2-logit softmax head
+- **Alternatives:** ResNet-18 (simpler, slower per FLOP), ConvNeXt-Tiny (7x the parameters), a single-logit sigmoid head.
+- **Why:** 4.0 M parameters, strong ImageNet transfer, small ONNX file and fast CPU inference for serving. Two logits match "class-weighted cross-entropy" literally and export cleanly; P(defective) is the softmax of column 1, as fixed in `core/constants.py`.
+- **Trade-off:** depthwise convolutions train slowly on CPU (214 ms/img measured for a full fine-tune step).
+
+### D-021 Two-stage fine-tuning; BatchNorm frozen with the backbone in stage 1
+- **Alternatives:** single-stage full fine-tuning; layer-wise LR decay.
+- **Why:** a randomly initialised head sends large, noisy gradients into pretrained features. Training the head alone first (LR 1e-3, 3 epochs), then everything (LR 1e-4, cosine), avoids destroying them. In stage 1 the backbone runs in eval mode so BatchNorm keeps its ImageNet statistics.
+- **Trade-off:** one more hyperparameter pair (head epochs and LR).
+
+### D-022 Class-weighted cross-entropy (weights from train counts only)
+- **Alternatives:** `WeightedRandomSampler`; focal loss.
+- **Why:** it's a single, transparent change to the loss: `n_total / (2 · n_class)` computed on train only (§3.5). The sampler repeats minority images (more overfitting to duplicates) and changes what an epoch means. Focal loss adds a γ to tune and mainly helps extreme imbalance, which casting data (about 57% defective) doesn't have.
+- **Trade-off:** weighting distorts the predicted probabilities. V3's temperature scaling and threshold selection on val correct for this.
+
+### D-023 Model selection: max val PR-AUC, ties broken by lower val loss; early stopping only in stage 2
+- **Alternatives:** val loss alone; val accuracy; F1@0.5.
+- **Why:** PR-AUC is threshold-free and focused on the defective class, which suits a threshold chosen later (V3). Casting data is easy enough that PR-AUC can hit 1.0 on several epochs, so validation cross-entropy breaks the tie. The un-augmented train metrics of the chosen checkpoint are reported next to val to check for overfitting.
+- **Trade-off:** each epoch costs one extra pass over val.
+
+### D-024 Checkpoints: `torch.save` of a state dict + JSON metadata, loaded with `weights_only=True`
+- **Alternatives:** pickling the full model; safetensors plus a sidecar JSON.
+- **Why:** `weights_only=True` refuses to unpickle arbitrary objects, so a tampered checkpoint can't execute code. Keeping metadata as plain JSON (config, config hash, git commit, epoch, val metrics) keeps it to one self-describing file.
+- **Trade-off:** torch-specific. Serving never loads it anyway: it uses ONNX (V5).

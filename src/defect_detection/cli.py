@@ -5,13 +5,16 @@ from tests, notebooks and the Makefile.
 """
 
 import json
+import logging
+import shutil
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
 import pandas as pd
 import typer
 
-from defect_detection.config import load_config
+from defect_detection.config import config_hash, load_config
 from defect_detection.data.dedupe import cluster_images
 from defect_detection.data.inventory import format_report, scan_dataset, summarize
 from defect_detection.data.leakage_audit import run_audit
@@ -121,9 +124,28 @@ def audit(config_path: ConfigOption = DEFAULT_CONFIG) -> None:
 
 
 @app.command()
-def train() -> None:
-    """Two-stage fine-tuning of the classifier (V2)."""
-    _not_yet("V2")
+def train(config_path: ConfigOption = DEFAULT_CONFIG) -> None:
+    """Two-stage fine-tuning; selects the checkpoint with the best validation PR-AUC."""
+    # Imported lazily so data commands don't pay torch's import time.
+    from defect_detection.training.trainer import train as run_training
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
+    config = load_config(config_path)
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    run_dir = config.train.output_dir / f"{stamp}_{config_hash(config)}"
+    summary = run_training(config, run_dir)
+    (config.train.output_dir / "LATEST").write_text(run_dir.name, encoding="utf-8")
+    reports = Path("reports")
+    (reports / "figures").mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(run_dir / "curves.png", reports / "figures" / "train_curves.png")
+    _write_json(reports / "train_summary.json", summary)
+    for name in ("val", "train_no_aug"):
+        m = summary[name]
+        typer.echo(
+            f"{name:<13} PR-AUC={m['pr_auc']:.4f} ROC-AUC={m['roc_auc']:.4f} "
+            f"F1@0.5={m['f1']:.4f} loss={m['loss']:.4f}"
+        )
+    typer.echo(f"best checkpoint: {run_dir / 'best.pt'}")
 
 
 @app.command()

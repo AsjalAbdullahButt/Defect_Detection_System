@@ -23,3 +23,44 @@ split:
   val: 0.15
   test: 0.15
   val_fraction_of_official_train: 0.15   # used by the official strategy
+
+preprocess:
+  # Shared by training and serving (core/preprocessing.py). Direct resize, no crop: a crop
+  # could cut off a defect on the rim. ImageNet statistics, never fitted to our data.
+  image_size: 224
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+
+augment:
+  # Train split only. Mild, label-preserving changes that mimic plausible capture variation.
+  # No random crops or cutout: either could remove the only defective pixels and create
+  # "defective" images that show no defect (label noise).
+  rotation_degrees: 15
+  hflip_p: 0.5
+  vflip_p: 0.5
+  brightness: 0.2           # ColorJitter factor range [0.8, 1.2]
+  contrast: 0.2
+  blur_p: 0.2
+  blur_sigma: [0.1, 1.0]
+  noise_p: 0.2
+  noise_std: 0.02           # Gaussian noise on [0, 1] pixels
+  translate: 0.05           # max shift as a fraction of image size
+  scale: [0.95, 1.05]
+
+model:
+  backbone: efficientnet_b0 # alternatives: resnet18, convnext_tiny
+  pretrained: true
+  drop_rate: 0.2
+
+train:
+  output_dir: runs          # gitignored; one sub-folder per run
+  device: auto              # cuda if available, else cpu
+  batch_size: 32
+  num_workers: 2
+  head_epochs: 3            # stage 1: backbone frozen, classifier only
+  head_lr: 1.0e-3
+  finetune_epochs: 20       # stage 2: all layers, early-stopped
+  finetune_lr: 1.0e-4
+  weight_decay: 1.0e-4
+  early_stopping_patience: 4
+  class_weighting: balanced # weighted cross-entropy, weights fit on train split only

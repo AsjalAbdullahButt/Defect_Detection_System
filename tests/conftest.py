@@ -6,6 +6,7 @@ from pathlib import Path
 import matplotlib
 import pandas as pd
 import pytest
+import yaml
 
 from defect_detection.config import ProjectConfig
 from defect_detection.data.dedupe import cluster_images
@@ -32,26 +33,26 @@ def casting_like_dataset(tmp_path: Path) -> Path:
     return root
 
 
+REPO_CONFIG = Path(__file__).resolve().parents[1] / "configs" / "train.yaml"
+
+
 def make_config(root: Path, strategy: str = "auto", seed: int = 42) -> ProjectConfig:
-    """Project config pointing at a temporary raw/processed pair."""
-    return ProjectConfig.model_validate(
-        {
-            "seed": seed,
-            "data": {
-                "raw_dir": root / "raw",
-                "processed_dir": root / "processed",
-                "class_aliases": {"def_front": "defective", "ok_front": "normal"},
-            },
-            "dedupe": {"phash_hamming_threshold": 4},
-            "split": {
-                "strategy": strategy,
-                "train": 0.7,
-                "val": 0.15,
-                "test": 0.15,
-                "val_fraction_of_official_train": 0.15,
-            },
-        }
+    """The repo config with paths under ``root`` and a tiny, untrained model for speed."""
+    raw = yaml.safe_load(REPO_CONFIG.read_text(encoding="utf-8"))
+    raw["seed"] = seed
+    raw["data"].update(raw_dir=str(root / "raw"), processed_dir=str(root / "processed"))
+    raw["split"]["strategy"] = strategy
+    raw["preprocess"]["image_size"] = 64
+    raw["model"].update(backbone="test_efficientnet", pretrained=False)
+    raw["train"].update(
+        output_dir=str(root / "runs"),
+        device="cpu",
+        batch_size=8,
+        num_workers=0,
+        head_epochs=1,
+        finetune_epochs=2,
     )
+    return ProjectConfig.model_validate(raw)
 
 
 @dataclass

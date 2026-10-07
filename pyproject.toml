@@ -96,7 +96,7 @@ warn_unused_configs = true
 
 # Third-party libraries without type information.
 [[tool.mypy.overrides]]
-module = ["sklearn.*"]
+module = ["sklearn.*", "torchvision.*"]
 ignore_missing_imports = true
 
 # core/ and serving/ get the remaining --strict flags (mypy's `strict` is global-only).
