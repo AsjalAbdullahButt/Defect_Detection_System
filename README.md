@@ -4,7 +4,7 @@ Classifies product images as **normal** or **defective** (the positive class) us
 transfer-learned CNN. Evaluation follows a leakage-safe protocol, and the model is served by a
 hardened ONNX Runtime API that doesn't depend on torch.
 
-> Status: **V3 — calibration & operating point** (code complete, tested on synthetic data; awaiting the real dataset). Later sections are added as each version lands.
+> Status: **V3 — calibration & operating point.** Real dataset (Kaggle casting, both releases) processed and leakage-audited; training in progress. Later sections are added as each version lands.
 
 ## Quickstart (development)
 

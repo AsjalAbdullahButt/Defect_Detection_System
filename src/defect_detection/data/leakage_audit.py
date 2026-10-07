@@ -1,87 +1,100 @@
-"""Leakage audit: prove that no image, or near-copy of one, appears in more than one split.
+"""Leakage audit: prove that no image, or same-part copy of one, appears in two splits.
 
-The audit re-derives cross-split similarity from the pHashes instead of trusting the cluster
-ids written by the split step, so a bug in clustering or splitting cannot hide leakage.
-Checks (all must pass):
+The audit re-derives cross-split similarity from image content instead of trusting the
+cluster ids written by the split step, so a bug in clustering or splitting cannot hide
+leakage. Checks (all must pass):
 
 * every manifest image is either assigned to a split or excluded with a reason;
 * no SHA-256 occurs in two splits;
 * no cluster id occurs in two splits;
-* no cross-split pair (test-vs-train/val, val-vs-train) is within the near-duplicate threshold,
-  including rotated/flipped variants;
-* every split contains both classes.
+* no evaluation image (val, test, external_test) has a training-side match (train, and val for
+  the test sets) at or above the near-duplicate threshold, including rotated/flipped copies;
+* train, val and test contain both classes (external_test too, when present).
 
-A looser "borderline" count (2x threshold) is reported for information only, to show how
-sensitive the result is to the threshold choice.
+Counts above a looser ``info_threshold`` are reported for information only: they show how
+much residual similarity remains just below the cut-off.
 """
 
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from defect_detection.core.hashing import sha256_of_hashes
-from defect_detection.data.dedupe import min_dihedral_distances, parse_phashes
-from defect_detection.data.split import EXCLUDED, SPLITS, class_counts
+from defect_detection.data.dedupe import Thumbnails, nearest_similarity
+from defect_detection.data.split import EXCLUDED, EXTERNAL_TEST, class_counts
 
-_CHUNK = 64
-
-
-def count_cross_pairs(
-    query: pd.Series, target: pd.Series, threshold: int
-) -> tuple[int, int | None]:
-    """(number of query/target pairs within threshold, smallest distance seen)."""
-    if query.empty or target.empty:
-        return 0, None
-    q, t = parse_phashes(query), parse_phashes(target)[:, 0]
-    n_close, smallest = 0, 64
-    for start in range(0, len(q), _CHUNK):
-        best, _ = min_dihedral_distances(q[start : start + _CHUNK], t)
-        n_close += int((best <= threshold).sum())
-        smallest = min(smallest, int(best.min()))
-    return n_close, smallest
+# (evaluation split, split it must not resemble)
+CROSS_CHECKS = [
+    ("val", "train"),
+    ("test", "train"),
+    ("test", "val"),
+    (EXTERNAL_TEST, "train"),
+    (EXTERNAL_TEST, "val"),
+]
 
 
-def run_audit(manifest: pd.DataFrame, splits: pd.DataFrame, threshold: int) -> dict[str, Any]:
-    """Run all checks; ``result["passed"]`` is True only if every check passed."""
-    df = splits.merge(manifest[["rel_path", "phash_d8"]], on="rel_path", how="left")
-    used = df[df["split"] != EXCLUDED]
+def run_audit(
+    manifest: pd.DataFrame,
+    splits: pd.DataFrame,
+    thumbs: Thumbnails,
+    threshold: float,
+    info_threshold: float,
+    k: int,
+) -> dict[str, Any]:
+    """Run all checks; ``result["passed"]`` is True only if every check passed.
+
+    ``thumbs`` rows must align with ``manifest`` rows.
+    """
+    position = pd.Series(np.arange(len(manifest)), index=manifest["rel_path"])
+    used = splits[splits["split"] != EXCLUDED]
     checks: dict[str, bool] = {}
 
     checks["all_manifest_rows_accounted_for"] = set(manifest["rel_path"]) == set(
         splits["rel_path"]
     ) and bool((splits.loc[splits["split"] == EXCLUDED, "exclude_reason"] != "").all())
+    checks["no_sha256_in_two_splits"] = bool((used.groupby("sha256")["split"].nunique() <= 1).all())
+    checks["no_cluster_in_two_splits"] = bool(
+        (used.groupby("cluster_id")["split"].nunique() <= 1).all()
+    )
 
-    sha_splits = used.groupby("sha256")["split"].nunique()
-    checks["no_sha256_in_two_splits"] = bool((sha_splits <= 1).all())
+    def rows_of(split: str) -> np.ndarray:
+        return position.loc[used.loc[used["split"] == split, "rel_path"]].to_numpy()
 
-    cluster_splits = used.groupby("cluster_id")["split"].nunique()
-    checks["no_cluster_in_two_splits"] = bool((cluster_splits <= 1).all())
-
-    by_split = {s: used.loc[used["split"] == s, "phash_d8"] for s in SPLITS}
-    cross_pairs: dict[str, dict[str, int | None]] = {}
-    for a, b in [("test", "train"), ("test", "val"), ("val", "train")]:
-        close, smallest = count_cross_pairs(by_split[a], by_split[b], threshold)
-        borderline, _ = count_cross_pairs(by_split[a], by_split[b], 2 * threshold)
-        cross_pairs[f"{a}_vs_{b}"] = {
-            "pairs_within_threshold": close,
-            "pairs_within_2x_threshold_info_only": borderline,
-            "min_distance": smallest,
+    cross: dict[str, dict[str, Any]] = {}
+    for query, target in CROSS_CHECKS:
+        q_rows, t_rows = rows_of(query), rows_of(target)
+        if len(q_rows) == 0 or len(t_rows) == 0:
+            continue
+        sims = nearest_similarity(thumbs.subset(q_rows), thumbs.subset(t_rows), k)
+        cross[f"{query}_vs_{target}"] = {
+            "n_query": len(q_rows),
+            "pairs_at_or_above_threshold": int((sims >= threshold).sum()),
+            "at_or_above_info_threshold": int((sims >= info_threshold).sum()),
+            "max_similarity": round(float(sims.max()), 5),
+            "median_nearest_similarity": round(float(np.median(sims)), 5),
         }
     checks["no_near_duplicates_across_splits"] = all(
-        v["pairs_within_threshold"] == 0 for v in cross_pairs.values()
+        v["pairs_at_or_above_threshold"] == 0 for v in cross.values()
     )
 
     counts = class_counts(used)
-    checks["every_split_has_both_classes"] = all(n > 0 for c in counts.values() for n in c.values())
+    has_external = sum(counts[EXTERNAL_TEST].values()) > 0
+    required = ["train", "val", "test"] + ([EXTERNAL_TEST] if has_external else [])
+    checks["every_split_has_both_classes"] = all(min(counts[s].values()) > 0 for s in required)
 
     test_hashes = used.loc[used["split"] == "test", "sha256"]
+    external_hashes = used.loc[used["split"] == EXTERNAL_TEST, "sha256"]
     return {
         "passed": all(checks.values()),
         "checks": checks,
         "threshold": threshold,
-        "cross_split_near_duplicates": cross_pairs,
+        "info_threshold": info_threshold,
+        "cross_split_similarity": cross,
         "counts": counts,
-        "excluded": int((df["split"] == EXCLUDED).sum()),
+        "excluded": int((splits["split"] == EXCLUDED).sum()),
         "test_set_sha256": sha256_of_hashes(test_hashes),
         "test_set_size": len(test_hashes),
+        "external_test_set_sha256": sha256_of_hashes(external_hashes),
+        "external_test_set_size": len(external_hashes),
     }

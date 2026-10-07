@@ -1,32 +1,16 @@
-"""Build manifest.csv: one row per decodable image with SHA-256, perceptual hashes and metadata.
+"""Build manifest.csv: one row per decodable image with its SHA-256, label and metadata.
 
-The manifest is created before any split so duplicates can be found across the whole dataset.
-Each image stores the pHash of all 8 rotations/flips (the dihedral group D4; index 0 is the
-untransformed image). Comparing one image's 8 variants with another image's identity hash
-detects copies that were rotated or flipped, which is how augmented duplicates are spotted.
+The manifest is created before any split so exact duplicates (same SHA-256) can be found
+across the whole dataset. Near-duplicates are found from image content in dedupe.py.
 """
 
 from pathlib import Path
 
-import imagehash
 import pandas as pd
-from PIL import Image
 
 from defect_detection.core.constants import CLASS_NAMES
 from defect_detection.core.hashing import sha256_file
 from defect_detection.data.inventory import Inventory, scan_dataset
-
-# Identity first, then rotations, then the four reflections.
-DIHEDRAL_TRANSFORMS: tuple[Image.Transpose | None, ...] = (
-    None,
-    Image.Transpose.ROTATE_90,
-    Image.Transpose.ROTATE_180,
-    Image.Transpose.ROTATE_270,
-    Image.Transpose.FLIP_LEFT_RIGHT,
-    Image.Transpose.FLIP_TOP_BOTTOM,
-    Image.Transpose.TRANSPOSE,
-    Image.Transpose.TRANSVERSE,
-)
 
 MANIFEST_COLUMNS = [
     "rel_path",
@@ -35,21 +19,11 @@ MANIFEST_COLUMNS = [
     "label",
     "source_split",
     "sha256",
-    "phash_d8",
     "width",
     "height",
     "mode",
     "size_bytes",
 ]
-
-
-def dihedral_phashes(path: Path) -> list[str]:
-    """64-bit pHash (16 hex chars) of the image under each of the 8 dihedral transforms."""
-    with Image.open(path) as img:
-        gray = img.convert("L")
-    return [
-        str(imagehash.phash(gray if t is None else gray.transpose(t))) for t in DIHEDRAL_TRANSFORMS
-    ]
 
 
 def resolve_classes(inventory: Inventory, class_aliases: dict[str, str]) -> dict[str, str]:
@@ -82,7 +56,6 @@ def build_manifest(raw_dir: Path, class_aliases: dict[str, str]) -> tuple[pd.Dat
                 "label": CLASS_NAMES.index(class_name),
                 "source_split": record.split,
                 "sha256": sha256_file(path),
-                "phash_d8": " ".join(dihedral_phashes(path)),
                 "width": record.width,
                 "height": record.height,
                 "mode": record.mode,

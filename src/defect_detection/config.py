@@ -25,6 +25,8 @@ class DataConfig(_Strict):
     raw_dir: Path
     processed_dir: Path
     class_aliases: dict[str, str]
+    # Top-level folders (relative to raw_dir) held out entirely as a second, external test set.
+    external_test_dirs: tuple[str, ...] = ()
 
     @model_validator(mode="after")
     def _aliases_target_known_classes(self) -> "DataConfig":
@@ -35,9 +37,19 @@ class DataConfig(_Strict):
 
 
 class DedupeConfig(_Strict):
-    """Near-duplicate detection settings."""
+    """Near-duplicate detection: rotation/flip-aligned correlation of grayscale thumbnails."""
 
-    phash_hamming_threshold: int = Field(ge=0, le=16)
+    similarity_threshold: float = Field(gt=0, le=1)
+    info_threshold: float = Field(gt=0, le=1)
+    coarse_size: int = Field(ge=8, le=64)
+    fine_size: int = Field(ge=32, le=512)
+    shortlist_k: int = Field(ge=1, le=100)
+
+    @model_validator(mode="after")
+    def _info_is_looser(self) -> "DedupeConfig":
+        if self.info_threshold > self.similarity_threshold:
+            raise ValueError("info_threshold must be <= similarity_threshold")
+        return self
 
 
 class SplitConfig(_Strict):

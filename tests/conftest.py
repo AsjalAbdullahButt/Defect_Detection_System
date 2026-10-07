@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import matplotlib
 import pandas as pd
@@ -9,7 +10,7 @@ import pytest
 import yaml
 
 from defect_detection.config import ProjectConfig
-from defect_detection.data.dedupe import cluster_images
+from defect_detection.data.dedupe import Thumbnails, load_thumbnails
 from defect_detection.data.manifest import build_manifest
 from defect_detection.data.split import make_splits
 from tests.fixtures.synthetic import build_planted_dataset, write_image
@@ -40,7 +41,11 @@ def make_config(root: Path, strategy: str = "auto", seed: int = 42) -> ProjectCo
     """The repo config with paths under ``root`` and a tiny, untrained model for speed."""
     raw = yaml.safe_load(REPO_CONFIG.read_text(encoding="utf-8"))
     raw["seed"] = seed
-    raw["data"].update(raw_dir=str(root / "raw"), processed_dir=str(root / "processed"))
+    raw["data"].update(
+        raw_dir=str(root / "raw"),
+        processed_dir=str(root / "processed"),
+        external_test_dirs=["external"],
+    )
     raw["split"]["strategy"] = strategy
     raw["preprocess"]["image_size"] = 64
     raw["model"].update(backbone="test_efficientnet", pretrained=False)
@@ -62,9 +67,9 @@ class PipelineRun:
     config: ProjectConfig
     cases: dict[str, str]
     manifest: pd.DataFrame
-    dedupe_report: dict[str, object]
+    thumbs: Thumbnails
     splits: pd.DataFrame
-    split_report: dict[str, object]
+    split_report: dict[str, Any]
 
     def row(self, case: str) -> pd.Series:
         """The splits.csv row for a planted case."""
@@ -76,9 +81,12 @@ def run_pipeline(root: Path, with_official_test: bool) -> PipelineRun:
     config = make_config(root)
     cases = build_planted_dataset(config.data.raw_dir, with_official_test)
     manifest, _ = build_manifest(config.data.raw_dir, config.data.class_aliases)
-    cluster_id, dedupe_report = cluster_images(manifest, config.dedupe.phash_hamming_threshold)
-    splits, split_report = make_splits(manifest, cluster_id, config.split, config.seed)
-    return PipelineRun(config, cases, manifest, dedupe_report, splits, split_report)
+    d = config.dedupe
+    thumbs = load_thumbnails(config.data.raw_dir, manifest["rel_path"], d.coarse_size, d.fine_size)
+    splits, split_report = make_splits(
+        manifest, thumbs, config.split, d, config.seed, config.data.external_test_dirs
+    )
+    return PipelineRun(config, cases, manifest, thumbs, splits, split_report)
 
 
 @pytest.fixture(scope="module")

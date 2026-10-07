@@ -9,13 +9,22 @@ data:
   class_aliases:
     def_front: defective
     ok_front: normal
+  # The 512x512 release is a separate capture with no split: never trained on, evaluated
+  # once in V4 as a second test set (after removing same-part copies of train/val images).
+  external_test_dirs: [casting_512x512]
 
 dedupe:
-  # Max Hamming distance (of 64 bits) between pHashes, minimised over 8 rotations/flips, for
-  # two images to count as near-duplicates. 4 = >=94% identical bits: catches re-encodes,
-  # resizes and rotated/flipped copies while staying strict enough not to merge distinct parts
-  # in a visually homogeneous dataset. The audit reports counts at 2x for sensitivity.
-  phash_hamming_threshold: 4
+  # Near-duplicate = same physical part. Signal: Pearson correlation of standardised grayscale
+  # images, maximised over the 8 rotations/flips. A 32px pass shortlists the k most similar
+  # candidates per image; a 128px pass re-scores them. 64-bit pHash was tried first and
+  # rejected: on this dataset almost every image is within 4 bits of another (D-031).
+  # 0.99: pairs at or above it were visually verified as the same part (nicks/burrs match);
+  # below ~0.98 the score also merges distinct, similar-looking normal parts.
+  similarity_threshold: 0.99
+  info_threshold: 0.97      # audit reports cross-split pairs above this (information only)
+  coarse_size: 32
+  fine_size: 128
+  shortlist_k: 30            # candidates re-scored at 128px per image; 10 missed a link (audit caught it)
 
 split:
   strategy: auto            # auto = official if the raw data has a test folder, else random

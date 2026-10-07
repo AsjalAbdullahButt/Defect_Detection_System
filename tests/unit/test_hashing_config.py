@@ -24,7 +24,8 @@ def test_sha256_of_hashes_is_order_independent() -> None:
 def test_repo_config_is_valid() -> None:
     config = load_config(REPO_CONFIG)
     assert config.seed == 42
-    assert config.dedupe.phash_hamming_threshold == 4
+    assert config.dedupe.similarity_threshold == 0.99
+    assert config.data.external_test_dirs == ("casting_512x512",)
 
 
 def _raw() -> dict:

@@ -66,7 +66,7 @@ Format: **Decision · Alternatives · Why · Trade-off**. One entry per non-triv
 
 ## V1 — Manifest, dedupe, split, leakage audit
 
-### D-011 Near-duplicates: 64-bit pHash, Hamming ≤ 4, minimised over 8 rotations/flips
+### D-011 Near-duplicates: 64-bit pHash, Hamming ≤ 4, minimised over 8 rotations/flips — SUPERSEDED by D-031
 
 - **Alternatives:** exact SHA-256 only; aHash/dHash; CNN-embedding similarity; threshold 8–10.
 - **Why:** pHash (DCT of a 32×32 grayscale) ignores re-encoding, resizing and small brightness changes. Hashing all 8 dihedral variants catches copies that were rotated or flipped, which is how offline augmentation usually works. A threshold of 4 bits (≥ 94% of bits equal) is strict, because every image of the same part type looks alike.
@@ -101,6 +101,38 @@ Format: **Decision · Alternatives · Why · Trade-off**. One entry per non-triv
 - **Alternatives:** parse YAML in each command; put EDA code in the notebook.
 - **Why:** a single pydantic schema rejects unknown keys and invalid ratios at load time. Every report records the git commit (with `-dirty` if there are uncommitted changes) and the config hash. EDA logic lives in a tested module that can't load test rows, so the notebook stays thin. These three files are not in §2.
 - **Trade-off:** more modules, but each has one job.
+
+## V1 revision — adapting to the real dataset (Kaggle casting, both releases)
+
+### D-031 Near-duplicates by rotation/flip-aligned image correlation, not pHash
+
+- **Alternatives:** keep pHash with a lower threshold; CNN-embedding cosine similarity; SSIM.
+- **Why:** on the real data, pHash couldn't separate copies from look-alikes. 95% of train images had another image within 4 bits, the distance histograms had no gap, and pairs at distance 0 included *different* parts with *different* labels (checked visually). Instead I use the Pearson correlation of standardised grayscale images, maximised over the 8 rotations/flips: a 32px pass shortlists candidates and a 128px pass re-scores them, where the nicks and burrs that identify a part are visible. It's plain NumPy matrix maths, with no model needed to decide what counts as a duplicate.
+- **Trade-off:** small arbitrary rotations reduce the correlation, so some same-part copies fall below the threshold. That residual is measured (audit info threshold, V4 buckets), not hidden.
+
+### D-032 Threshold 0.99, set by visual verification; shortlist k = 30
+
+- **Alternatives:** 0.97 (catches more copies); 0.995; choosing by cluster statistics alone.
+- **Why:** test→train pairs were rendered at 0.9999, 0.999, 0.998, 0.995, 0.99, 0.98, 0.97, 0.955 and 0.94. Down to about 0.97 the *defective* pairs were clearly the same part (matching burrs). But normal images drop out much faster as the threshold loosens, because distinct good parts look alike, so below about 0.98 the score also merges different normal parts. 0.99 is the point where matches were reliably the same part. The shortlist was raised from 10 to 30 after the audit found a link that clustering had missed with k = 10.
+- **Trade-off:** same-part copies between 0.95 and 0.99 remain (the audit reports 483 / 715 test images with a train match ≥ 0.97). V4 reports metrics by similarity bucket to show the effect.
+
+### D-033 Clean evaluation sets by direct match; group the training pool by transitive clusters
+
+- **Alternatives:** exclude every train image in the same transitive cluster as a test image (the first implementation).
+- **Why:** transitive chains over look-alike normals joined different parts. The largest clusters (209 and 198 images) were all normal, and random member pairs had a median similarity of only 0.89. Excluding whole chains removed 1,058 train images, about 1,000 of them normal. Direct matching (a train image is dropped only if *its own* best similarity to a test image is ≥ 0.99) removes 524. Inside the training pool, chains are kept as groups: that only forces them into one split (train or val), which is the safe direction.
+- **Trade-off:** a train image linked to a test image only through an intermediate image survives if its own similarity is < 0.99. That's the residual similarity measured above.
+
+### D-034 `casting_512x512` held out as an external test set
+
+- **Alternatives:** ignore it; add it to training.
+- **Why:** it is a separate capture: its median nearest-train similarity is 0.880, against 0.978 for the official test. No image had a ≥ 0.99 match in train or val. It's the best available estimate of performance on genuinely unseen parts and a different capture setup. Images are resized to 224 like everything else.
+- **Trade-off:** 1,300 images that could have been training data, and a second number to explain. I think it's worth it: the official test mostly measures recognition of near-copies.
+
+### D-035 Lighting shortcut: measured, mitigated by augmentation, checked in V4
+
+- **Finding (train+val only):** mean brightness alone separates the classes with AUC 0.883 (defective 139 vs normal 150 grey levels, Cohen's d = −1.77); contrast alone reaches 0.812. Most likely the two classes were captured in different sessions.
+- **Why no extra change now:** the ±20% brightness/contrast jitter (D-019) is larger than the ~8% class gap, so in training brightness can't be relied on as a cue. Per-image standardisation would remove the cue completely but changes the shared preprocessing. It stays the first remedy if V4 shows the model relies on brightness.
+- **Check in V4:** error rates against brightness, and the external test set, where the shortcut may not hold.
 
 ## V2 — Shared preprocessing & training
 

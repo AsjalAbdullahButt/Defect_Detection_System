@@ -42,8 +42,30 @@ Raw class folders map to `normal` / `defective` through `data.class_aliases` in
 | `processed/split_report.json` | Duplicate statistics, achieved ratios, exclusions, provenance | `make split` |
 | `processed/leakage_audit.json` | Pass/fail checks, cross-split near-duplicate counts, test-set hash | `make audit` |
 
+## The dataset used
+
+**Real-life industrial dataset of casting product** (submersible pump impellers, top view),
+Kaggle: <https://www.kaggle.com/datasets/ravirajsinh45/real-life-industrial-dataset-of-casting-product>.
+`archive.zip` is extracted unmodified into `data/raw/`:
+
+| Folder | Images | Size | Role in this project |
+| --- | --- | --- | --- |
+| `casting_data/casting_data/train/{def_front,ok_front}` | 3758 / 2875 | 300×300 | train + val (after cleaning) |
+| `casting_data/casting_data/test/{def_front,ok_front}` | 453 / 262 | 300×300 | official test, kept intact |
+| `casting_512x512/casting_512x512/{def_front,ok_front}` | 781 / 519 | 512×512 | external test (`data.external_test_dirs`) |
+
+All 8,648 files decode as RGB JPEG; none are corrupt.
+
+**Leakage found in the official split** (details in `docs/DECISIONS.md`, D-031 to D-034):
+
+- 64 test images are byte-identical to train images;
+- 524 more train images are same-part copies (rotated/flipped/re-lit) of test images at
+  aligned correlation ≥ 0.99. All of these are excluded from train;
+- the 512×512 release has no same-part match in train/val (median nearest similarity 0.88),
+  so it serves as an independent second test set.
+
 ## Licence
 
-Record the dataset's licence here once `make inspect` has identified the dataset and the
-licence has been confirmed on its source page. Non-commercial licences (e.g. CC BY-NC-*)
-allow this assessment but not commercial deployment of models trained on the data.
+Listed on Kaggle as **CC BY-NC-ND 4.0** (to be confirmed on the dataset page before any reuse).
+Non-commercial: fine for this assessment, but a model trained on it must not be deployed
+commercially, and the data itself must not be redistributed (it is never committed here).

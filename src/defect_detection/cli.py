@@ -14,8 +14,8 @@ from typing import Annotated
 import pandas as pd
 import typer
 
-from defect_detection.config import config_hash, load_config
-from defect_detection.data.dedupe import cluster_images
+from defect_detection.config import ProjectConfig, config_hash, load_config
+from defect_detection.data.dedupe import Thumbnails, load_thumbnails
 from defect_detection.data.inventory import format_report, scan_dataset, summarize
 from defect_detection.data.leakage_audit import run_audit
 from defect_detection.data.manifest import build_manifest
@@ -89,34 +89,59 @@ def manifest(config_path: ConfigOption = DEFAULT_CONFIG) -> None:
     )
 
 
+def _thumbnails(config: ProjectConfig, manifest: pd.DataFrame) -> Thumbnails:
+    d = config.dedupe
+    return load_thumbnails(config.data.raw_dir, manifest["rel_path"], d.coarse_size, d.fine_size)
+
+
 @app.command()
 def split(config_path: ConfigOption = DEFAULT_CONFIG) -> None:
-    """Cluster duplicates and write the group-aware stratified splits.csv."""
+    """Cluster same-part copies and write the group-aware stratified splits.csv."""
     config = load_config(config_path)
     out = config.data.processed_dir
     table = pd.read_csv(out / "manifest.csv")
-    cluster_id, dedupe_report = cluster_images(table, config.dedupe.phash_hamming_threshold)
-    splits, split_report = make_splits(table, cluster_id, config.split, config.seed)
+    splits, split_report = make_splits(
+        table,
+        _thumbnails(config, table),
+        config.split,
+        config.dedupe,
+        config.seed,
+        config.data.external_test_dirs,
+    )
     splits.to_csv(out / "splits.csv", index=False)
     typer.echo(f"wrote {out / 'splits.csv'}")
     _write_json(
         out / "split_report.json",
-        {**provenance(config), "dedupe": dedupe_report, "split": split_report},
+        {**provenance(config), **split_report},
     )
-    typer.echo(json.dumps(split_report["counts"], indent=2))
+    typer.echo(
+        json.dumps(
+            {"counts": split_report["counts"], "excluded": split_report["excluded"]}, indent=2
+        )
+    )
 
 
 @app.command()
 def audit(config_path: ConfigOption = DEFAULT_CONFIG) -> None:
-    """Re-check splits for leakage; exits 1 if any check fails."""
+    """Re-check splits for leakage from image content; exits 1 if any check fails."""
     config = load_config(config_path)
     out = config.data.processed_dir
     table = pd.read_csv(out / "manifest.csv")
     splits = pd.read_csv(out / "splits.csv", keep_default_na=False)
-    result = run_audit(table, splits, config.dedupe.phash_hamming_threshold)
+    d = config.dedupe
+    result = run_audit(
+        table,
+        splits,
+        _thumbnails(config, table),
+        d.similarity_threshold,
+        d.info_threshold,
+        d.shortlist_k,
+    )
     _write_json(out / "leakage_audit.json", {**provenance(config), **result})
     for name, ok in result["checks"].items():
         typer.echo(f"  {'PASS' if ok else 'FAIL'}  {name}")
+    for pair, stats in result["cross_split_similarity"].items():
+        typer.echo(f"  {pair:<28} {stats}")
     if not result["passed"]:
         typer.echo("Leakage audit FAILED", err=True)
         raise typer.Exit(code=1)

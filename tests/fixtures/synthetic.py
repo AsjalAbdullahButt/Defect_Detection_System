@@ -45,6 +45,8 @@ def build_planted_dataset(root: Path, with_official_test: bool = True) -> dict[s
     * ``jpeg_near_dup``: JPEG re-encode of a train PNG
     * ``label_conflict``: identical bytes in both class folders
     * ``corrupt``: truncated file
+    * ``external_copy``: horizontally flipped copy of a train image in the external folder
+    * ``external_unique``: an external image unrelated to anything else
     """
     train = "train" if with_official_test else "all"
     test = "test" if with_official_test else "all"
@@ -69,6 +71,13 @@ def build_planted_dataset(root: Path, with_official_test: bool = True) -> dict[s
     save(conflict, root / train / "ok_front" / "conflict.png")
     corrupt = save(smooth_image(998), root / train / "ok_front" / "broken.png")
     corrupt.write_bytes(corrupt.read_bytes()[:60])
+    for i in range(4):
+        save(smooth_image(500 + i), root / "external" / "def_front" / f"e{i:02d}.png")
+        save(smooth_image(600 + i), root / "external" / "ok_front" / f"eo{i:02d}.png")
+    save(
+        smooth_image(205).transpose(Image.Transpose.FLIP_LEFT_RIGHT),
+        root / "external" / "ok_front" / "copy_of_o05.png",
+    )
 
     return {
         "exact_copy": f"{train}/def_front/d00_copy.png",
@@ -80,4 +89,7 @@ def build_planted_dataset(root: Path, with_official_test: bool = True) -> dict[s
         "label_conflict_def": f"{train}/def_front/conflict.png",
         "label_conflict_ok": f"{train}/ok_front/conflict.png",
         "corrupt": f"{train}/ok_front/broken.png",
+        "external_copy": "external/ok_front/copy_of_o05.png",
+        "external_copy_source": f"{train}/ok_front/o05.png",
+        "external_unique": "external/def_front/e00.png",
     }
