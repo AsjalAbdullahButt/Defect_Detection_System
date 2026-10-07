@@ -140,6 +140,25 @@ class OperatingPointConfig(_Strict):
         return self
 
 
+class EvaluationConfig(_Strict):
+    """One-shot test evaluation settings."""
+
+    bootstrap_resamples: int = Field(ge=100)
+    ci_level: float = Field(gt=0.5, lt=1)
+    # Edges for reporting metrics by an image's similarity to its nearest TRAIN image.
+    similarity_buckets: tuple[float, ...]
+
+
+class AnomalyConfig(_Strict):
+    """PatchCore-style baseline trained on normal TRAIN images only."""
+
+    backbone: str
+    out_indices: tuple[int, ...]
+    patches_per_image: int = Field(ge=1)
+    coreset_size: int = Field(ge=10)
+    projection_dim: int = Field(ge=8)
+
+
 class ProjectConfig(_Strict):
     """Root of configs/train.yaml."""
 
@@ -152,6 +171,8 @@ class ProjectConfig(_Strict):
     model: ModelConfig
     train: TrainConfig
     operating_point: OperatingPointConfig
+    evaluation: EvaluationConfig
+    anomaly: AnomalyConfig
 
 
 def load_config(path: Path) -> ProjectConfig:

@@ -27,7 +27,7 @@ from matplotlib.figure import Figure
 from torch import nn
 from torch.utils.data import DataLoader
 
-from defect_detection.config import ProjectConfig
+from defect_detection.config import ModelConfig, PreprocessConfig, ProjectConfig
 from defect_detection.core.constants import DEFECTIVE_LABEL
 from defect_detection.core.preprocessing import PreprocessSpec
 from defect_detection.data.augment import TrainTransform
@@ -110,6 +110,43 @@ def load_checkpoint(path: Path) -> dict[str, Any]:
     """Load a checkpoint without unpickling arbitrary objects."""
     checkpoint: dict[str, Any] = torch.load(path, map_location="cpu", weights_only=True)
     return checkpoint
+
+
+@dataclass(frozen=True)
+class TrainedModel:
+    """A trained run's network plus the preprocessing it was trained with."""
+
+    model: nn.Module
+    spec: PreprocessSpec
+    backbone: str
+    checkpoint: dict[str, Any]
+
+
+def load_trained_model(run_dir: Path, device: torch.device) -> TrainedModel:
+    """Rebuild the network from ``best.pt``; architecture/preprocessing come from the checkpoint."""
+    checkpoint = load_checkpoint(run_dir / CHECKPOINT_NAME)
+    trained = checkpoint["config"]
+    model_cfg = ModelConfig.model_validate({**trained["model"], "pretrained": False})
+    pre = PreprocessConfig.model_validate(trained["preprocess"])
+    model = create_model(model_cfg)
+    model.load_state_dict(checkpoint["state_dict"])
+    model.to(device)
+    spec = PreprocessSpec(pre.image_size, pre.mean, pre.std)
+    return TrainedModel(model, spec, model_cfg.backbone, checkpoint)
+
+
+def split_logits(
+    config: ProjectConfig, trained: TrainedModel, split: str, device: torch.device
+) -> tuple[list[str], npt.NDArray[np.int64], npt.NDArray[np.float64]]:
+    """(rel_paths, labels, logits) for one split, in deterministic order, no augmentation."""
+    dataset = SplitDataset(
+        config.data.processed_dir / "splits.csv", config.data.raw_dir, split, trained.spec
+    )
+    loader: DataLoader[tuple[torch.Tensor, int]] = DataLoader(
+        dataset, batch_size=config.train.batch_size * 2, num_workers=config.train.num_workers
+    )
+    labels, logits = collect_logits(trained.model, loader, device)
+    return dataset.rel_paths, labels, logits
 
 
 @torch.no_grad()

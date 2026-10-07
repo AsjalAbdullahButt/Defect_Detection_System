@@ -18,44 +18,23 @@ from pathlib import Path
 from typing import Any
 
 import matplotlib.pyplot as plt
-import torch
-from torch.utils.data import DataLoader
 
-from defect_detection.config import ModelConfig, PreprocessConfig, ProjectConfig, config_hash
+from defect_detection.config import ProjectConfig, config_hash
 from defect_detection.core.model_meta import InputSpec, ModelMeta, ReviewBand
-from defect_detection.core.preprocessing import PreprocessSpec
-from defect_detection.data.dataset import SplitDataset
 from defect_detection.training import calibration as cal
 from defect_detection.training import thresholding as th
 from defect_detection.training.evaluate import classification_metrics
-from defect_detection.training.model_factory import create_model
-from defect_detection.training.trainer import (
-    CHECKPOINT_NAME,
-    collect_logits,
-    load_checkpoint,
-    resolve_device,
-)
+from defect_detection.training.trainer import load_trained_model, resolve_device, split_logits
 
 CANDIDATE_META = "model_meta.candidate.json"
 
 
 def calibrate_and_select(config: ProjectConfig, run_dir: Path) -> dict[str, Any]:
     """Fit temperature, pick threshold and review band on val; write reports + candidate meta."""
-    checkpoint = load_checkpoint(run_dir / CHECKPOINT_NAME)
-    trained = checkpoint["config"]
-    model_cfg = ModelConfig.model_validate({**trained["model"], "pretrained": False})
-    pre = PreprocessConfig.model_validate(trained["preprocess"])
-    spec = PreprocessSpec(pre.image_size, pre.mean, pre.std)
-
     device = resolve_device(config.train.device)
-    model = create_model(model_cfg)
-    model.load_state_dict(checkpoint["state_dict"])
-    model.to(device)
-    val = SplitDataset(config.data.processed_dir / "splits.csv", config.data.raw_dir, "val", spec)
-    loader: DataLoader[tuple[torch.Tensor, int]] = DataLoader(
-        val, batch_size=config.train.batch_size * 2, num_workers=config.train.num_workers
-    )
-    labels, logits = collect_logits(model, loader, device)
+    trained = load_trained_model(run_dir, device)
+    checkpoint = trained.checkpoint
+    _, labels, logits = split_logits(config, trained, "val", device)
 
     op = config.operating_point
     temperature, temperature_note = cal.choose_temperature(logits, labels)
@@ -87,8 +66,10 @@ def calibrate_and_select(config: ProjectConfig, run_dir: Path) -> dict[str, Any]
     ranking = classification_metrics(labels, after, threshold)
     meta = ModelMeta(
         model_version=run_dir.name,
-        backbone=model_cfg.backbone,
-        input=InputSpec(image_size=pre.image_size, mean=pre.mean, std=pre.std),
+        backbone=trained.backbone,
+        input=InputSpec(
+            image_size=trained.spec.image_size, mean=trained.spec.mean, std=trained.spec.std
+        ),
         temperature=temperature,
         threshold=threshold,
         review_band=ReviewBand(low=low, high=high),

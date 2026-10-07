@@ -87,3 +87,18 @@ operating_point:
     missed_defect: 20       # faulty part reaches a customer
     false_alarm: 1          # good part scrapped or re-inspected
     review: 0.25            # a person looks at one image
+
+evaluation:
+  # Test sets (official test + external_test) are evaluated exactly ONCE with the final
+  # model, temperature and threshold chosen on validation.
+  bootstrap_resamples: 1000
+  ci_level: 0.95
+  similarity_buckets: [0.0, 0.95, 0.97, 0.98, 0.99]
+
+anomaly:
+  # PatchCore-style baseline: ImageNet features of NORMAL train images only (no defect labels).
+  backbone: efficientnet_b0
+  out_indices: [2, 3]       # stride-8 and stride-16 feature maps (mid-level texture)
+  patches_per_image: 64     # random patch subsample per training image (keeps memory small)
+  coreset_size: 5000        # greedy k-center memory bank
+  projection_dim: 128       # random projection used only for coreset selection

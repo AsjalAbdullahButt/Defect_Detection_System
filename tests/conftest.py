@@ -49,6 +49,8 @@ def make_config(root: Path, strategy: str = "auto", seed: int = 42) -> ProjectCo
     raw["split"]["strategy"] = strategy
     raw["preprocess"]["image_size"] = 64
     raw["model"].update(backbone="test_efficientnet", pretrained=False)
+    raw["anomaly"].update(backbone="test_efficientnet", patches_per_image=8, coreset_size=50)
+    raw["evaluation"]["bootstrap_resamples"] = 200
     raw["train"].update(
         output_dir=str(root / "runs"),
         device="cpu",

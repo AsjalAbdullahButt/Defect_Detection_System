@@ -7,7 +7,7 @@ RUN := uv run
 DATA_DIR ?= data/raw
 
 .DEFAULT_GOAL := help
-.PHONY: help lock setup setup-serve lint format typecheck test inspect manifest split audit data eda train calibrate
+.PHONY: help lock setup setup-serve lint format typecheck test inspect manifest split audit data eda train calibrate evaluate anomaly error-analysis
 
 help: ## List available targets
 	@uv run --no-project python -c "import re; [print(f'{m[0]:<14} {m[1]}') for m in re.findall(r'^([a-z-]+):.*?## (.*)$$', open('Makefile').read(), re.M)]"
@@ -64,3 +64,12 @@ train: ## Two-stage fine-tuning -> runs/<stamp>_<config-hash>/best.pt (+ curves,
 
 calibrate: ## Temperature + threshold + review band on VAL for runs/LATEST -> model_meta.candidate.json
 	$(RUN) defect-detection calibrate
+
+evaluate: ## ONE-SHOT test + external-test evaluation of runs/LATEST (refuses to run twice)
+	$(RUN) defect-detection evaluate
+
+anomaly: ## PatchCore baseline (normal train only), threshold on val, ONE evaluation on test sets
+	$(RUN) defect-detection anomaly-baseline
+
+error-analysis: ## Execute notebooks/02_error_analysis.ipynb (reads saved test predictions only)
+	$(RUN) jupyter nbconvert --to notebook --execute --inplace notebooks/02_error_analysis.ipynb

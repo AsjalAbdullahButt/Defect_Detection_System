@@ -221,3 +221,35 @@ Format: **Decision · Alternatives · Why · Trade-off**. One entry per non-triv
 - **Alternatives:** split val into a calibration half and a threshold half.
 - **Why:** halving an already small val set would make both estimates noisier. Temperature scaling preserves ranking, so threshold selection isn't biased by it beyond the shared sample. The 20 : 1 : 0.25 costs (missed defect : false alarm : review) are labelled illustrative and live in config; they only populate a comparison table.
 - **Trade-off:** val metrics at the chosen threshold are optimistic. Test (V4) gives the unbiased estimate.
+
+## V4 — One-shot test evaluation & error analysis
+
+### D-036 "Evaluate once" enforced in code, not by discipline
+
+- **Alternatives:** a convention in the README; re-running is fine because nothing is tuned.
+- **Why:** a second look at test is how test results quietly turn into model selection. `evaluate` refuses if the run has a `TEST_EVALUATED.json` marker, if the leakage audit didn't pass, or if the test/external fingerprints recomputed from `splits.csv` differ from the audited ones. Temperature, threshold and band are read from the val-only candidate meta. The PatchCore baseline has the same once-only guard.
+- **Trade-off:** fixing a reporting bug afterwards means deleting the marker by hand, which is visible and deliberate.
+
+### D-037 Two test sets, reported side by side, plus metrics by similarity bucket
+
+- **Alternatives:** report only the official test set.
+- **Why:** the official test still has a median nearest-train similarity of 0.978 after cleaning, while the 512 external set has 0.880 (D-034). Reporting both, and bucketing errors by each image's similarity to its nearest train image, separates "recognises near-copies" from "generalises to new parts".
+- **Trade-off:** two sets of numbers to explain, but each answers a different question.
+
+### D-038 95% percentile bootstrap CIs (1,000 resamples, seed 42)
+
+- **Alternatives:** Wilson intervals per proportion; DeLong for AUC.
+- **Why:** one method covers every metric (AUCs, precision, recall, F1, macro-F1) without separate formulas, and needs no normality assumption. Resamples with a single class are skipped and counted.
+- **Trade-off:** it ignores the grouped structure (same-part copies inside a test set), so the intervals are somewhat too narrow. With near-perfect scores, percentile intervals also collapse towards the point estimate; the error counts are reported next to them.
+
+### D-039 Grad-CAM via timm's `forward_features` / `forward_head`, no hooks
+
+- **Alternatives:** the `pytorch-grad-cam` package; forward/backward hooks on a named layer.
+- **Why:** about 15 lines, no extra dependency, and it works for every timm backbone because they all expose the same two-step forward. The gradient of the defect logit with respect to the last feature map gives a weight per channel.
+- **Trade-off:** 7×7 resolution for EfficientNet at 224px, so heatmaps are coarse. They're good enough to see whether the model looks at the part or at the background.
+
+### D-040 PatchCore baseline written in-repo, with documented simplifications
+
+- **Alternatives:** anomalib (pulls in Lightning and a large dependency tree); skip the baseline.
+- **Why:** the method is short: pretrained mid-level patch features, a memory bank of normal patches selected with greedy k-center, and an image score equal to its worst patch. It is fit on NORMAL train images only and its threshold is chosen on val with the classifier's recall policy, so the comparison is fair. Simplifications: random 64 patches per image before the coreset, a 5,000-patch bank, and no score reweighting.
+- **Trade-off:** probably a few points below a tuned anomalib PatchCore. It is a baseline to argue from, not a competitor to optimise.

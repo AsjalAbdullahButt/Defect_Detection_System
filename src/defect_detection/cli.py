@@ -223,9 +223,61 @@ def calibrate(
 
 
 @app.command()
-def evaluate() -> None:
-    """One-shot test-set evaluation (V4)."""
-    _not_yet("V4")
+def evaluate(
+    config_path: ConfigOption = DEFAULT_CONFIG,
+    run: Annotated[
+        Path | None, typer.Option(file_okay=False, help="Run directory (default: runs/LATEST).")
+    ] = None,
+) -> None:
+    """ONE-SHOT evaluation on the official and external test sets (refuses a second run)."""
+    from defect_detection.training.one_shot_test import AlreadyEvaluatedError, evaluate_once
+
+    config = load_config(config_path)
+    run_dir = _resolve_run(config.train.output_dir, run)
+    try:
+        metrics = evaluate_once(config, run_dir)
+    except AlreadyEvaluatedError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    reports = Path("reports")
+    (reports / "figures").mkdir(parents=True, exist_ok=True)
+    for name in ("test_curves.png", "test_confusion.png"):
+        shutil.copyfile(run_dir / name, reports / "figures" / name)
+    shutil.copyfile(run_dir / "test_predictions.csv", reports / "test_predictions.csv")
+    _write_json(reports / "metrics.json", metrics)
+    for split, result in metrics["results"].items():
+        m = result["at_operating_threshold"]
+        cm = result["confusion"]
+        typer.echo(f"{split} (n={result['n']}, threshold={metrics['threshold']:.4f})")
+        for name in ("pr_auc", "roc_auc", "precision", "recall", "f1", "macro_f1"):
+            typer.echo(
+                f"  {name:<9} {m[name]['point']:.4f}  [{m[name]['low']:.4f}, {m[name]['high']:.4f}]"
+            )
+        typer.echo(f"  confusion tn={cm['tn']} fp={cm['fp']} fn={cm['fn']} tp={cm['tp']}")
+
+
+@app.command("anomaly-baseline")
+def anomaly_baseline(config_path: ConfigOption = DEFAULT_CONFIG) -> None:
+    """PatchCore baseline: fit on normal train, threshold on val, ONE evaluation on test sets."""
+    from defect_detection.training.anomaly_baseline import RESULT_FILE, run_anomaly_baseline
+
+    config = load_config(config_path)
+    reports = Path("reports")
+    reports.mkdir(exist_ok=True)
+    try:
+        results = run_anomaly_baseline(config, reports)
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"memory bank: {results['fit']}")
+    for split in ("val", "test", "external_test"):
+        m = results[split]
+        typer.echo(
+            f"{split:<14} ROC-AUC={m['roc_auc']:.4f} PR-AUC={m['pr_auc']:.4f} "
+            f"P={m['precision']:.4f} R={m['recall']:.4f} F1={m['f1']:.4f}"
+            + (f" {m['ms_per_image_cpu']} ms/img" if "ms_per_image_cpu" in m else "")
+        )
+    typer.echo(f"wrote {reports / RESULT_FILE}")
 
 
 @app.command()
