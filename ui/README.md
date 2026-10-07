@@ -15,6 +15,12 @@ From the repository root, install `bash scripts/setup.sh serve ui`, configure
 `bash scripts/run_ui.sh` in separate terminals. Open <http://localhost:8501>.
 The exported model must already exist; see the [main quickstart](../README.md#quickstart).
 
+## UI demo
+
+To watch the UI in action, view the [Streamlit UI walkthrough on Loom](https://www.loom.com/share/55d59f81004d40cfa33bc2156640cf9a).
+
+## Configuration
+
 | Setting | Default | Purpose |
 | --- | --- | --- |
 | `DD_UI_API_URL` | `http://127.0.0.1:8000` | API address |

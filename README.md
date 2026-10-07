@@ -10,6 +10,8 @@ Secure defect detection API with leakage controls and a simple Streamlit demo UI
 
 [View the screenshot and results gallery](docs/GALLERY.md)
 
+[Watch the Streamlit UI walkthrough on Loom](https://www.loom.com/share/55d59f81004d40cfa33bc2156640cf9a) to see the UI in action.
+
 ## What it does
 
 Upload a top-view photo of a cast impeller, individually or in a batch.
